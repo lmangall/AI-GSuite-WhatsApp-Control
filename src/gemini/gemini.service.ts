@@ -56,6 +56,10 @@ export class GeminiService implements OnModuleInit {
   }
 
   private convertMCPToolsToGemini(mcpTools: Tool[]): GeminiTool[] {
+    if (mcpTools.length === 0) {
+      return [];
+    }
+
     const functionDeclarations: FunctionDeclaration[] = mcpTools.map(tool => {
       const schema = tool.inputSchema as any;
       
@@ -66,11 +70,13 @@ export class GeminiService implements OnModuleInit {
           type: 'object',
           properties: schema?.properties || {},
           required: schema?.required || [],
-        },
-      };
+        }
+      } as FunctionDeclaration;
     });
 
-    return [{ functionDeclarations }];
+    return [{
+      functionDeclarations
+    }];
   }
 
   private getUserHistory(userId: string): Content[] {

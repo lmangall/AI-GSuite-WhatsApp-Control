@@ -92,55 +92,56 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
 
       const history = this.getUserHistory(userId);
 
+      // Build messages array for chat completion
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT,
-        },
+        { role: 'system', content: SYSTEM_PROMPT },
         ...history,
         { role: 'user', content: userMessage },
       ];
 
       this.logger.log(`[${requestId}] 💬 Sending to OpenAI: "${userMessage}"`);
 
-      const response = await this.client.responses.create({
+      const response = await this.client.chat.completions.create({
         model: 'gpt-5-nano',
+        messages: messages,
         tools: [
           {
-            type: 'mcp',
-            server_label: 'gmail_calendar',
-            server_description: 'Gmail and Google Calendar MCP server',
-            server_url: this.mcpServerUrl,
-            require_approval: 'never',
+            type: 'function',
+            function: {
+              name: 'mcp_tool',
+              description: 'Execute MCP server tools',
+              parameters: {
+                type: 'object',
+                properties: {
+                  tool_name: {
+                    type: 'string',
+                    description: 'Name of the MCP tool to execute',
+                  },
+                  arguments: {
+                    type: 'object',
+                    description: 'Arguments to pass to the tool',
+                  },
+                },
+                required: ['tool_name', 'arguments'],
+              },
+            },
           },
         ],
-        input: messages,
       });
 
-      // Log MCP tool listings
-      const mcpListItems = response.output.filter((item: any) => item.type === 'mcp_list_tools');
-      if (mcpListItems.length > 0) {
-        mcpListItems.forEach((item: any) => {
-          this.logger.log(`[${requestId}] 🛠️  Listed ${item.tools?.length || 0} MCP tools`);
-        });
+      const assistantMessage = response.choices[0].message;
+      
+      // Handle tool calls if present
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        this.logger.log(`[${requestId}] 🔧 Executed ${assistantMessage.tool_calls.length} tool call(s)`);
+        
+        for (const toolCall of assistantMessage.tool_calls) {
+          this.logger.log(`[${requestId}] ⚙️  Tool: ${toolCall.function.name}`);
+          this.logger.log(`[${requestId}] 📝 Args: ${toolCall.function.arguments}`);
+        }
       }
 
-      // Log MCP tool calls
-      const mcpCalls = response.output.filter((item: any) => item.type === 'mcp_call');
-      if (mcpCalls.length > 0) {
-        this.logger.log(`[${requestId}] 🔧 Executed ${mcpCalls.length} tool call(s)`);
-        mcpCalls.forEach((call: any) => {
-          this.logger.log(`[${requestId}] ⚙️  Tool: ${call.name}`);
-          this.logger.log(`[${requestId}] 📝 Args: ${call.arguments}`);
-          if (call.error) {
-            this.logger.error(`[${requestId}] ❌ Error: ${call.error}`);
-          } else {
-            this.logger.log(`[${requestId}] ✅ Success`);
-          }
-        });
-      }
-
-      const finalResponse = response.output_text;
+      const finalResponse = assistantMessage.content || 'No response generated';
       this.logger.log(`[${requestId}] 📤 OpenAI response: "${finalResponse.substring(0, 100)}${finalResponse.length > 100 ? '...' : ''}"`);
 
       // Save to history
@@ -148,7 +149,7 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
       this.addToHistory(userId, { role: 'assistant', content: finalResponse });
 
       return finalResponse;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`[${requestId}] ❌ Error processing with OpenAI:`, error);
       throw new Error(`Failed to process message with OpenAI: ${error.message}`);
     }

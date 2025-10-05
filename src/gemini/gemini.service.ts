@@ -55,28 +55,60 @@ export class GeminiService implements OnModuleInit {
     }
   }
 
-  private convertMCPToolsToGemini(mcpTools: Tool[]): GeminiTool[] {
-    if (mcpTools.length === 0) {
-      return [];
+  private sanitizeSchema(schema: any): any {
+    if (!schema || typeof schema !== 'object') return schema;
+
+    let sanitized = { ...schema };
+
+    // Remove unsupported fields
+    delete sanitized.additionalProperties;
+    delete sanitized.$schema;
+    delete sanitized.default;
+
+    // Handle anyOf/oneOf - take the first option
+    if (sanitized.anyOf) {
+      sanitized = { ...sanitized, ...sanitized.anyOf[0] };
+      delete sanitized.anyOf;
+    }
+    if (sanitized.oneOf) {
+      sanitized = { ...sanitized, ...sanitized.oneOf[0] };
+      delete sanitized.oneOf;
     }
 
+    // Recursively sanitize properties
+    if (sanitized.properties) {
+      const cleanProps: any = {};
+      for (const [key, value] of Object.entries(sanitized.properties)) {
+        cleanProps[key] = this.sanitizeSchema(value);
+      }
+      sanitized.properties = cleanProps;
+    }
+
+    // Recursively sanitize items (for arrays)
+    if (sanitized.items) {
+      sanitized.items = this.sanitizeSchema(sanitized.items);
+    }
+
+    return sanitized;
+  }
+
+  private convertMCPToolsToGemini(mcpTools: Tool[]): GeminiTool[] {
     const functionDeclarations: FunctionDeclaration[] = mcpTools.map(tool => {
       const schema = tool.inputSchema as any;
+      const sanitizedSchema = this.sanitizeSchema(schema);
       
       return {
         name: tool.name,
         description: tool.description || `Execute ${tool.name}`,
         parameters: {
           type: 'object',
-          properties: schema?.properties || {},
-          required: schema?.required || [],
-        }
-      } as FunctionDeclaration;
+          properties: sanitizedSchema?.properties || {},
+          required: sanitizedSchema?.required || [],
+        },
+      };
     });
 
-    return [{
-      functionDeclarations
-    }];
+    return [{ functionDeclarations }];
   }
 
   private getUserHistory(userId: string): Content[] {

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GeminiService } from './gemini-agent.service';
-import { OpenAIAgentService } from './openai-agent.service';
+import { GeminiService } from './gemini-agent-service';
+import { OpenAIAgentService } from './openai-agent-service';
 import { MCPModule } from '../mcp/mcp.module';
 import { IAgentService } from './agent.interface';
 

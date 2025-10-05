@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI, Content, Part, FunctionDeclaration, Tool as GeminiTool } from '@google/generative-ai';
+import { GoogleGenerativeAI, Content, Part, FunctionDeclaration, Tool as GeminiTool, SchemaType } from '@google/generative-ai';
 import { MCPService } from '../mcp/mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
@@ -101,7 +101,7 @@ export class GeminiService implements OnModuleInit {
         name: tool.name,
         description: tool.description || `Execute ${tool.name}`,
         parameters: {
-          type: 'object',
+          type: SchemaType.OBJECT,
           properties: sanitizedSchema?.properties || {},
           required: sanitizedSchema?.required || [],
         },

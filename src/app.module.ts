@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { WhapiModule } from './whapi/whapi.module';
 import { MCPModule } from './mcp/mcp.module';
+import { GeminiModule } from './gemini/gemini.module';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { MCPModule } from './mcp/mcp.module';
       envFilePath: '.env',
     }),
     MCPModule,
+    GeminiModule,
     WhapiModule,
   ],
 })

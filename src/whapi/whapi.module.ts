@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { WebhookController } from './webhook.controller';
 import { WhapiService } from './whapi.service';
-import { MCPModule } from '../mcp/mcp.module';
+import { GeminiModule } from '../gemini/gemini.module';
 
 @Module({
-  imports: [MCPModule],
+  imports: [GeminiModule],
   controllers: [WebhookController],
   providers: [WhapiService],
   exports: [WhapiService],

@@ -33,7 +33,7 @@ git reset --hard >/dev/null 2>&1
 git pull
 
 echo "📦 Installing dependencies..."
-npm install --omit=dev
+npm install 
 
 echo "🏗️ Building project..."
 npm run build

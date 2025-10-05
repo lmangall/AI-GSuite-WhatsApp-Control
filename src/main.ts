@@ -13,10 +13,15 @@ async function bootstrap() {
     app.enableShutdownHooks();
     
     const port = process.env.PORT || 80;
+    const channelId = process.env.WHATSAPP_CHANNEL_ID || 'default-channel';
+    
     await app.listen(port, '0.0.0.0');
     
     logger.log(`🚀 Application is running on: http://0.0.0.0:${port}`);
-    logger.log(`📨 Webhook endpoint: http://0.0.0.0:${port}/webhook`);
+    logger.log(`📨 Webhook endpoints:`);
+    logger.log(`   POST   http://0.0.0.0:${port}/${channelId}/messages`);
+    logger.log(`   PATCH  http://0.0.0.0:${port}/${channelId}/chats`);
+    logger.log(`🔧 MCP Server: ${process.env.MCP_SERVER_URL || 'NOT SET'}`);
     
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {

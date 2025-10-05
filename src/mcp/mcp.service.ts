@@ -1,10 +1,15 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { CallToolRequest, CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { 
+  CallToolRequest, 
+  CallToolResultSchema,
+  ListToolsResultSchema,
+  Tool
+} from '@modelcontextprotocol/sdk/types.js';
 
-type ToolResponse = any; // Replace with proper type from your SDK
+type ToolResponse = any;
 
 @Injectable()
 export class MCPService implements OnModuleInit, OnModuleDestroy {
@@ -34,7 +39,7 @@ export class MCPService implements OnModuleInit, OnModuleDestroy {
 
     try {
       this.client = new Client(
-        { name: 'nestjs-client', version: '1.0.0' },
+        { name: 'nestjs-whatsapp-client', version: '1.0.0' },
         { capabilities: { elicitation: {} } }
       );
 
@@ -47,7 +52,7 @@ export class MCPService implements OnModuleInit, OnModuleDestroy {
       await this.client.connect(this.transport);
       this.sessionId = this.transport.sessionId;
 
-      this.logger.log(`Connected to MCP server, session ID: ${this.sessionId}`);
+      this.logger.log(`✅ Connected to MCP server, session ID: ${this.sessionId}`);
     } catch (error) {
       this.logger.error('Failed to connect to MCP server:', error);
       throw new Error(`Failed to connect to MCP server: ${error.message}`);
@@ -63,6 +68,27 @@ export class MCPService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error('Error disconnecting from MCP server:', error);
       throw new Error(`Error disconnecting from MCP server: ${error.message}`);
+    }
+  }
+
+  async listTools(): Promise<Tool[]> {
+    if (!this.client) {
+      throw new Error('Not connected to MCP server');
+    }
+
+    try {
+      this.logger.debug('Listing available tools...');
+      
+      const result = await this.client.request(
+        { method: 'tools/list' },
+        ListToolsResultSchema
+      );
+      
+      this.logger.debug(`Found ${result.tools.length} tools`);
+      return result.tools;
+    } catch (error) {
+      this.logger.error('Error listing tools:', error);
+      throw new Error(`Failed to list tools: ${error.message}`);
     }
   }
 

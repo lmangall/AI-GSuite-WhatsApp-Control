@@ -2,6 +2,7 @@ import { Controller, Post, Patch, Body, Logger, Param, HttpCode, HttpStatus } fr
 import { WhapiService } from './whapi.service';
 import { WebhookMessagesPayloadDto } from './dto/webhook-message.dto';
 import { WebhookChatsPayloadDto } from './dto/webhook-chat.dto';
+import { MCPService } from '../mcp/mcp.service';
 
 @Controller()
 export class WebhookController {
@@ -9,7 +10,10 @@ export class WebhookController {
   private readonly processedMessages = new Set<string>();
   private readonly channelId = process.env.WHATSAPP_CHANNEL_ID || 'default-channel';
 
-  constructor(private readonly whapiService: WhapiService) {}
+  constructor(
+    private readonly whapiService: WhapiService,
+    private readonly mcpService: MCPService,
+  ) {}
 
   @Post(`:channelId/messages`)
   @HttpCode(HttpStatus.OK)
@@ -91,6 +95,33 @@ export class WebhookController {
     );
 
     try {
+      // === MCP INTEGRATION: List available tools ===
+      this.logger.log(`[${requestId}] 🔧 Fetching MCP tools...`);
+      const tools = await this.mcpService.listTools();
+      
+      this.logger.log(`\n[${requestId}] 🛠️  Available MCP Tools (${tools.length} found):`);
+      this.logger.log('='.repeat(60));
+      
+      tools.forEach((tool, index) => {
+        this.logger.log(`\n${index + 1}. ${tool.name}`);
+        this.logger.log(`   Description: ${tool.description || 'No description'}`);
+        
+        if (tool.inputSchema) {
+          const schema = tool.inputSchema as any;
+          if (schema.properties) {
+            this.logger.log(`   Parameters:`);
+            Object.keys(schema.properties).forEach(param => {
+              const prop = schema.properties[param];
+              this.logger.log(`     - ${param}: ${prop.type || 'any'} ${prop.description ? `(${prop.description})` : ''}`);
+            });
+          }
+        }
+      });
+      
+      this.logger.log('\n' + '='.repeat(60) + '\n');
+      // === END MCP INTEGRATION ===
+
+      // Send reply back to WhatsApp (keeping original functionality for now)
       const replyText = `[${requestId}] Received: ${originalMessage}`;
       const sent = await this.whapiService.sendMessage(senderPhone, replyText);
 
@@ -100,7 +131,7 @@ export class WebhookController {
         this.logger.error(`[${requestId}] ❌ Failed to send reply to ${senderPhone}`);
       }
     } catch (error) {
-      this.logger.error(`[${requestId}] ❌ Error sending reply: ${error.message}`);
+      this.logger.error(`[${requestId}] ❌ Error processing message: ${error.message}`, error.stack);
     }
   }
 

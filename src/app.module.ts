@@ -7,9 +7,10 @@ import { MCPModule } from './mcp/mcp.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
-    WhapiModule,
     MCPModule,
+    WhapiModule,
   ],
 })
 export class AppModule {}

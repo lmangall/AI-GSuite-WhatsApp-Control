@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { WebhookController } from './webhook.controller';
 import { WhapiService } from './whapi.service';
-import { GeminiModule } from '../gemini/gemini.module';
+import { AgentModule } from '../agent/agent.module';
 
 @Module({
-  imports: [GeminiModule],
+  imports: [AgentModule],
   controllers: [WebhookController],
   providers: [WhapiService],
   exports: [WhapiService],

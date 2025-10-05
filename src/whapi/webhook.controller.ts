@@ -1,8 +1,9 @@
-import { Controller, Post, Patch, Body, Logger, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Logger, Param, HttpCode, HttpStatus, Inject } from '@nestjs/common';
 import { WhapiService } from './whapi.service';
 import { WebhookMessagesPayloadDto } from './dto/webhook-message.dto';
 import { WebhookChatsPayloadDto } from './dto/webhook-chat.dto';
-import { GeminiService } from '../gemini/gemini.service';
+import { IAgentService } from '../agent/agent.interface';
+import { AGENT_SERVICE } from '../agent/agent.module';
 
 @Controller()
 export class WebhookController {
@@ -12,7 +13,7 @@ export class WebhookController {
 
   constructor(
     private readonly whapiService: WhapiService,
-    private readonly geminiService: GeminiService,
+    @Inject(AGENT_SERVICE) private readonly agentService: IAgentService,
   ) {}
 
   @Post(`:channelId/messages`)
@@ -98,22 +99,22 @@ export class WebhookController {
     try {
       // Special commands
       if (originalMessage.toLowerCase() === '/clear') {
-        this.geminiService.clearHistory(userId);
+        this.agentService.clearHistory(userId);
         await this.whapiService.sendMessage(senderPhone, '🗑️ Conversation history cleared!');
         this.logger.log(`[${requestId}] ✅ History cleared for ${senderPhone}`);
         return;
       }
 
       if (originalMessage.toLowerCase() === '/stats') {
-        const stats = this.geminiService.getHistoryStats();
+        const stats = this.agentService.getHistoryStats();
         const statsMessage = `📊 Stats:\n👥 Users: ${stats.totalUsers}\n💬 Messages: ${stats.totalMessages}`;
         await this.whapiService.sendMessage(senderPhone, statsMessage);
         this.logger.log(`[${requestId}] ✅ Stats sent to ${senderPhone}`);
         return;
       }
 
-      // Process message with Gemini AI
-      const aiResponse = await this.geminiService.processMessage(userId, originalMessage, requestId);
+      // Process message with AI agent
+      const aiResponse = await this.agentService.processMessage(userId, originalMessage, requestId);
 
       // Send AI response back to WhatsApp
       const sent = await this.whapiService.sendMessage(senderPhone, aiResponse);

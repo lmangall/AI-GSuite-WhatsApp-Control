@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, Content, Part, FunctionDeclaration, Tool as GeminiTool, SchemaType } from '@google/generative-ai';
 import { MCPService } from '../mcp/mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { IAgentService } from './agent.interface';
 
 interface ConversationHistory {
   userId: string;
@@ -11,7 +12,7 @@ interface ConversationHistory {
 }
 
 @Injectable()
-export class GeminiService implements OnModuleInit {
+export class GeminiService implements IAgentService, OnModuleInit {
   private readonly logger = new Logger(GeminiService.name);
   private genAI: GoogleGenerativeAI;
   private model: any;
@@ -169,6 +170,7 @@ export class GeminiService implements OnModuleInit {
 - Super casual, like texting a friend
 - Use "dude", "bro", "mate" occasionally 
 - Short responses when possible
+- Emojis are your friend 😎
 - Skip formalities - no "I apologize" or "I would be happy to"
 
 🧠 WHAT YOU KNOW ABOUT LEO:

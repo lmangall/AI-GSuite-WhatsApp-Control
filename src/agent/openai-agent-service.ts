@@ -6,7 +6,7 @@ import { IAgentService } from './agent.interface';
 
 interface ConversationHistory {
   userId: string;
-  messages: OpenAI.Chat.ChatCompletionMessageParam[];
+  messages: { role: string; content: string }[];
   lastActivity: Date;
 }
 
@@ -59,12 +59,12 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
     }
   }
 
-  private getUserHistory(userId: string): OpenAI.Chat.ChatCompletionMessageParam[] {
+  private getUserHistory(userId: string) {
     const history = this.conversationHistory.get(userId);
     return history?.messages || [];
   }
 
-  private addToHistory(userId: string, message: OpenAI.Chat.ChatCompletionMessageParam) {
+  private addToHistory(userId: string, message: { role: string; content: string }) {
     let history = this.conversationHistory.get(userId);
 
     if (!history) {
@@ -91,10 +91,11 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
 
       const history = this.getUserHistory(userId);
 
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      // Convert chat messages to OpenAI Responses input format
+      const input = [
         {
-          role: 'system',
-          content: `You're Leo's personal AI assistant - think of yourself as his tech-savvy buddy who handles his digital life.
+          type: 'input_text',
+          text: `You're Leo's personal AI assistant - think of yourself as his tech-savvy buddy who handles his digital life.
 
 🎭 VIBE:
 - Super casual, like texting a friend
@@ -122,8 +123,11 @@ Good ✅: "On it! Checking your emails now..."
 
 IMPORTANT: When Leo confirms an action ("yep", "yes", "do it"), IMMEDIATELY execute it with tools. Don't just say you will - actually do it!`,
         },
-        ...history,
-        { role: 'user', content: userMessage },
+        ...history.map((msg) => ({
+          type: 'input_text',
+          text: `${msg.role === 'user' ? 'User: ' : 'Assistant: '}${msg.content}`,
+        })),
+        { type: 'input_text', text: userMessage },
       ];
 
       this.logger.log(`[${requestId}] 💬 Sending to OpenAI: "${userMessage}"`);
@@ -134,12 +138,11 @@ IMPORTANT: When Leo confirms an action ("yep", "yes", "do it"), IMMEDIATELY exec
           {
             type: 'mcp',
             server_label: 'gmail_calendar',
-            server_description: 'Gmail and Google Calendar MCP server',
             server_url: this.mcpServerUrl,
             require_approval: 'never',
           },
         ],
-        input: messages,
+        input,
       });
 
       // Log MCP tool listings
@@ -156,7 +159,7 @@ IMPORTANT: When Leo confirms an action ("yep", "yes", "do it"), IMMEDIATELY exec
         this.logger.log(`[${requestId}] 🔧 Executed ${mcpCalls.length} tool call(s)`);
         mcpCalls.forEach((call: any) => {
           this.logger.log(`[${requestId}] ⚙️  Tool: ${call.name}`);
-          this.logger.log(`[${requestId}] 📝 Args: ${call.arguments}`);
+          this.logger.log(`[${requestId}] 📝 Args: ${JSON.stringify(call.arguments)}`);
           if (call.error) {
             this.logger.error(`[${requestId}] ❌ Error: ${call.error}`);
           } else {
@@ -166,14 +169,18 @@ IMPORTANT: When Leo confirms an action ("yep", "yes", "do it"), IMMEDIATELY exec
       }
 
       const finalResponse = response.output_text;
-      this.logger.log(`[${requestId}] 📤 OpenAI response: "${finalResponse.substring(0, 100)}${finalResponse.length > 100 ? '...' : ''}"`);
+      this.logger.log(
+        `[${requestId}] 📤 OpenAI response: "${finalResponse.substring(0, 100)}${
+          finalResponse.length > 100 ? '...' : ''
+        }"`,
+      );
 
       // Save to history
       this.addToHistory(userId, { role: 'user', content: userMessage });
       this.addToHistory(userId, { role: 'assistant', content: finalResponse });
 
       return finalResponse;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`[${requestId}] ❌ Error processing with OpenAI:`, error);
       throw new Error(`Failed to process message with OpenAI: ${error.message}`);
     }

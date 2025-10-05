@@ -152,10 +152,27 @@ export class GeminiService implements OnModuleInit {
       // Convert MCP tools to Gemini format
       const geminiTools = this.convertMCPToolsToGemini(mcpTools);
 
-      // Initialize model with tools
+      // Initialize model with tools and system instruction
       this.model = this.genAI.getGenerativeModel({
         model: 'gemini-2.0-flash-exp',
         tools: geminiTools,
+        systemInstruction: `You are a helpful AI assistant with access to various tools through MCP (Model Context Protocol).
+
+You can answer general questions using your knowledge, and you can also use the available tools when needed to:
+- Access Gmail and Calendar
+- Perform specific actions that require tool usage
+
+Guidelines:
+- Answer general questions directly without needing tools (greetings, explanations, advice, etc.)
+- Use tools ONLY when the user explicitly needs to interact with Gmail, Calendar, or other services
+- Be conversational and helpful
+- If you're not sure whether to use a tool, prefer answering directly first
+
+Examples:
+- "Hi" or "Hello" → Respond naturally, no tools needed
+- "What's 2+2?" → Answer directly, no tools needed  
+- "Check my email" → Use Gmail tool
+- "Schedule a meeting" → Use Calendar tool`,
       });
 
       // Get conversation history

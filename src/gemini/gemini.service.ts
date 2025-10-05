@@ -113,7 +113,11 @@ export class GeminiService implements OnModuleInit {
 
   private getUserHistory(userId: string): Content[] {
     const history = this.conversationHistory.get(userId);
-    return history?.messages || [];
+    if (!history?.messages) return [];
+    
+    // Filter out function/tool messages - only keep user and model messages
+    // Gemini history must start with 'user' role and alternate user/model
+    return history.messages.filter(msg => msg.role === 'user' || msg.role === 'model');
   }
 
   private addToHistory(userId: string, role: 'user' | 'model', text: string) {
@@ -128,14 +132,17 @@ export class GeminiService implements OnModuleInit {
       this.conversationHistory.set(userId, history);
     }
 
-    history.messages.push({
-      role,
-      parts: [{ text }],
-    });
+    // Only add user and model messages to history (no function calls)
+    if (role === 'user' || role === 'model') {
+      history.messages.push({
+        role,
+        parts: [{ text }],
+      });
 
-    // Keep only last N messages
-    if (history.messages.length > this.HISTORY_LIMIT) {
-      history.messages = history.messages.slice(-this.HISTORY_LIMIT);
+      // Keep only last N messages
+      if (history.messages.length > this.HISTORY_LIMIT) {
+        history.messages = history.messages.slice(-this.HISTORY_LIMIT);
+      }
     }
 
     history.lastActivity = new Date();
@@ -156,23 +163,40 @@ export class GeminiService implements OnModuleInit {
       this.model = this.genAI.getGenerativeModel({
         model: 'gemini-2.0-flash-exp',
         tools: geminiTools,
-        systemInstruction: `You are a helpful AI assistant with access to various tools through MCP (Model Context Protocol).
+        systemInstruction: `You are a helpful, friendly AI assistant with a cool, relaxed personality. Think of yourself as a smart personal assistant who genuinely wants to help.
 
-You can answer general questions using your knowledge, and you can also use the available tools when needed to:
-- Access Gmail and Calendar
-- Perform specific actions that require tool usage
+🎭 PERSONALITY:
+- Be conversational and natural - talk like a person, not a robot
+- Use casual language and be a bit playful when appropriate
+- Show empathy and understanding
+- Keep responses concise but friendly
 
-Guidelines:
-- Answer general questions directly without needing tools (greetings, explanations, advice, etc.)
-- Use tools ONLY when the user explicitly needs to interact with Gmail, Calendar, or other services
-- Be conversational and helpful
-- If you're not sure whether to use a tool, prefer answering directly first
+🧠 MEMORY:
+- Remember information the user shares (like their email address, preferences, names, etc.)
+- Reference past conversations naturally ("As you mentioned earlier...", "Your email l.mangallon@gmail.com...")
+- Don't ask for information they've already given you in this conversation
 
-Examples:
-- "Hi" or "Hello" → Respond naturally, no tools needed
-- "What's 2+2?" → Answer directly, no tools needed  
-- "Check my email" → Use Gmail tool
-- "Schedule a meeting" → Use Calendar tool`,
+🛠️ TOOLS USAGE:
+You have access to Gmail and Calendar tools. Use them when needed:
+
+**For Emails:**
+- When listing emails, ALWAYS show subjects (not message IDs)
+- Format: "You have X unread emails:" then list subjects with sender names
+- Example: "📧 From Stripe: Your invoice for October"
+- Only show IDs if user explicitly asks for technical details
+
+**General Guidelines:**
+- Answer general questions directly without tools (greetings, facts, advice)
+- Use tools ONLY when user needs Gmail/Calendar actions
+- If unsure, prefer direct answers over tool usage
+
+**Examples:**
+❌ BAD: "Here are message IDs: 199b500da7ef4fdf..."
+✅ GOOD: "You've got 10 unread emails! Here are the subjects:
+1. 📬 SaaS Club - Getting unstuck on your SaaS journey
+2. 💼 I want to connect (from John)"
+
+Remember: Be helpful, be human, be cool. 😎`,
       });
 
       // Get conversation history

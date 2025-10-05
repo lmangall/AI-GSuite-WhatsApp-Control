@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { MCPService } from '../mcp/mcp.service';
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { IAgentService } from './agent.interface';
 import { SYSTEM_PROMPT } from './agent.prompts';
 
@@ -19,7 +20,6 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
   private readonly HISTORY_LIMIT = 20;
   private readonly CLEANUP_INTERVAL = 1000 * 60 * 60; // 1 hour
   private readonly HISTORY_EXPIRY = 1000 * 60 * 60 * 24; // 24 hours
-  private mcpServerUrl: string;
 
   constructor(
     private configService: ConfigService,
@@ -30,11 +30,6 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY is not defined in environment variables');
-    }
-
-    this.mcpServerUrl = this.configService.get<string>('MCP_SERVER_URL');
-    if (!this.mcpServerUrl) {
-      throw new Error('MCP_SERVER_URL is not defined in environment variables');
     }
 
     this.client = new OpenAI({ apiKey });
@@ -86,9 +81,27 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
     history.lastActivity = new Date();
   }
 
+  private convertMCPToolsToOpenAI(mcpTools: Tool[]): OpenAI.Chat.ChatCompletionTool[] {
+    return mcpTools.map(tool => ({
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description || `Execute ${tool.name}`,
+        parameters: tool.inputSchema || { type: 'object', properties: {} },
+      },
+    }));
+  }
+
   async processMessage(userId: string, userMessage: string, requestId: string): Promise<string> {
     try {
       this.logger.log(`[${requestId}] 🤖 Processing with OpenAI for user: ${userId}`);
+
+      // Get available MCP tools
+      const mcpTools = await this.mcpService.listTools();
+      this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
+
+      // Convert MCP tools to OpenAI format
+      const openAITools = this.convertMCPToolsToOpenAI(mcpTools);
 
       const history = this.getUserHistory(userId);
 
@@ -101,50 +114,80 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
 
       this.logger.log(`[${requestId}] 💬 Sending to OpenAI: "${userMessage}"`);
 
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-5-nano',
+      let response = await this.client.chat.completions.create({
+        model: 'gpt-4',
         messages: messages,
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'mcp_tool',
-              description: 'Execute MCP server tools',
-              parameters: {
-                type: 'object',
-                properties: {
-                  tool_name: {
-                    type: 'string',
-                    description: 'Name of the MCP tool to execute',
-                  },
-                  arguments: {
-                    type: 'object',
-                    description: 'Arguments to pass to the tool',
-                  },
-                },
-                required: ['tool_name', 'arguments'],
-              },
-            },
-          },
-        ],
+        tools: openAITools,
       });
 
-      const assistantMessage = response.choices[0].message;
+      let assistantMessage = response.choices[0].message;
       
-      // Handle tool calls if present
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        this.logger.log(`[${requestId}] 🔧 Executed ${assistantMessage.tool_calls.length} tool call(s)`);
-        
-        for (const toolCall of assistantMessage.tool_calls) {
-          this.logger.log(`[${requestId}] ⚙️  Tool: ${toolCall.function.name}`);
-          this.logger.log(`[${requestId}] 📝 Args: ${toolCall.function.arguments}`);
-        }
+      // Handle tool calls loop (similar to Gemini's function call loop)
+      let functionCallCount = 0;
+      const MAX_FUNCTION_CALLS = 5;
+
+      while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && functionCallCount < MAX_FUNCTION_CALLS) {
+        functionCallCount++;
+        this.logger.log(`[${requestId}] 🔧 Function call #${functionCallCount}: ${assistantMessage.tool_calls.length} tool(s) to execute`);
+
+        // Add assistant message with tool calls to messages
+        messages.push(assistantMessage);
+
+        // Execute each tool call
+        const toolResults = await Promise.all(
+          assistantMessage.tool_calls.map(async (toolCall) => {
+            this.logger.log(`[${requestId}] ⚙️  Executing tool: ${toolCall.function.name}`);
+            this.logger.log(`[${requestId}] 📝 Arguments: ${toolCall.function.arguments}`);
+
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              const toolResult = await this.mcpService.callTool(toolCall.function.name, args);
+              
+              this.logger.log(`[${requestId}] ✅ Tool ${toolCall.function.name} executed successfully`);
+              this.logger.log(`[${requestId}] 📊 Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);
+              
+              return {
+                tool_call_id: toolCall.id,
+                role: 'tool' as const,
+                content: JSON.stringify(toolResult),
+              };
+            } catch (error: any) {
+              this.logger.error(`[${requestId}] ❌ Tool ${toolCall.function.name} failed: ${error.message}`);
+              
+              return {
+                tool_call_id: toolCall.id,
+                role: 'tool' as const,
+                content: JSON.stringify({ error: error.message }),
+              };
+            }
+          })
+        );
+
+        // Add tool results to messages
+        messages.push(...toolResults);
+
+        // Send tool results back to OpenAI
+        response = await this.client.chat.completions.create({
+          model: 'gpt-4',
+          messages: messages,
+          tools: openAITools,
+        });
+
+        assistantMessage = response.choices[0].message;
+      }
+
+      if (functionCallCount >= MAX_FUNCTION_CALLS) {
+        this.logger.warn(`[${requestId}] ⚠️  Max function calls (${MAX_FUNCTION_CALLS}) reached`);
+      }
+
+      if (functionCallCount === 0 && userMessage.toLowerCase().match(/send|email|schedule|create|add|list/)) {
+        this.logger.warn(`[${requestId}] ⚠️  No tools called but message suggests action needed: "${userMessage}"`);
       }
 
       const finalResponse = assistantMessage.content || 'No response generated';
       this.logger.log(`[${requestId}] 📤 OpenAI response: "${finalResponse.substring(0, 100)}${finalResponse.length > 100 ? '...' : ''}"`);
 
-      // Save to history
+      // Save to history (only user and final assistant messages, not tool calls)
       this.addToHistory(userId, { role: 'user', content: userMessage });
       this.addToHistory(userId, { role: 'assistant', content: finalResponse });
 

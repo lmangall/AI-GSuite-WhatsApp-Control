@@ -2,7 +2,7 @@ import { Controller, Post, Patch, Body, Logger, Param, HttpCode, HttpStatus } fr
 import { WhapiService } from './whapi.service';
 import { WebhookMessagesPayloadDto } from './dto/webhook-message.dto';
 import { WebhookChatsPayloadDto } from './dto/webhook-chat.dto';
-import { MCPService } from '../mcp/mcp.service';
+import { GeminiService } from '../gemini/gemini.service';
 
 @Controller()
 export class WebhookController {
@@ -12,7 +12,7 @@ export class WebhookController {
 
   constructor(
     private readonly whapiService: WhapiService,
-    private readonly mcpService: MCPService,
+    private readonly geminiService: GeminiService,
   ) {}
 
   @Post(`:channelId/messages`)
@@ -89,49 +89,52 @@ export class WebhookController {
 
     const originalMessage = message.text.body;
     const senderPhone = message.chat_id.replace('@s.whatsapp.net', '');
+    const userId = message.chat_id; // Use chat_id as unique user identifier
 
     this.logger.log(
       `[${requestId}] 📨 Processing message from ${senderPhone} (${message.chat_id}): "${originalMessage}"`
     );
 
     try {
-      // === MCP INTEGRATION: List available tools ===
-      this.logger.log(`[${requestId}] 🔧 Fetching MCP tools...`);
-      const tools = await this.mcpService.listTools();
-      
-      this.logger.log(`\n[${requestId}] 🛠️  Available MCP Tools (${tools.length} found):`);
-      this.logger.log('='.repeat(60));
-      
-      tools.forEach((tool, index) => {
-        this.logger.log(`\n${index + 1}. ${tool.name}`);
-        this.logger.log(`   Description: ${tool.description || 'No description'}`);
-        
-        if (tool.inputSchema) {
-          const schema = tool.inputSchema as any;
-          if (schema.properties) {
-            this.logger.log(`   Parameters:`);
-            Object.keys(schema.properties).forEach(param => {
-              const prop = schema.properties[param];
-              this.logger.log(`     - ${param}: ${prop.type || 'any'} ${prop.description ? `(${prop.description})` : ''}`);
-            });
-          }
-        }
-      });
-      
-      this.logger.log('\n' + '='.repeat(60) + '\n');
-      // === END MCP INTEGRATION ===
+      // Special commands
+      if (originalMessage.toLowerCase() === '/clear') {
+        this.geminiService.clearHistory(userId);
+        await this.whapiService.sendMessage(senderPhone, '🗑️ Conversation history cleared!');
+        this.logger.log(`[${requestId}] ✅ History cleared for ${senderPhone}`);
+        return;
+      }
 
-      // Send reply back to WhatsApp (keeping original functionality for now)
-      const replyText = `[${requestId}] Received: ${originalMessage}`;
-      const sent = await this.whapiService.sendMessage(senderPhone, replyText);
+      if (originalMessage.toLowerCase() === '/stats') {
+        const stats = this.geminiService.getHistoryStats();
+        const statsMessage = `📊 Stats:\n👥 Users: ${stats.totalUsers}\n💬 Messages: ${stats.totalMessages}`;
+        await this.whapiService.sendMessage(senderPhone, statsMessage);
+        this.logger.log(`[${requestId}] ✅ Stats sent to ${senderPhone}`);
+        return;
+      }
+
+      // Process message with Gemini AI
+      const aiResponse = await this.geminiService.processMessage(userId, originalMessage, requestId);
+
+      // Send AI response back to WhatsApp
+      const sent = await this.whapiService.sendMessage(senderPhone, aiResponse);
 
       if (sent) {
-        this.logger.log(`[${requestId}] ✅ Reply sent to ${senderPhone}`);
+        this.logger.log(`[${requestId}] ✅ AI response sent to ${senderPhone}`);
       } else {
-        this.logger.error(`[${requestId}] ❌ Failed to send reply to ${senderPhone}`);
+        this.logger.error(`[${requestId}] ❌ Failed to send AI response to ${senderPhone}`);
       }
     } catch (error) {
       this.logger.error(`[${requestId}] ❌ Error processing message: ${error.message}`, error.stack);
+      
+      // Send error message to user
+      try {
+        await this.whapiService.sendMessage(
+          senderPhone, 
+          '❌ Sorry, I encountered an error processing your message. Please try again.'
+        );
+      } catch (sendError) {
+        this.logger.error(`[${requestId}] ❌ Failed to send error message: ${sendError.message}`);
+      }
     }
   }
 

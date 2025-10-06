@@ -180,6 +180,22 @@ CRITICAL FORMAT RULES:
           
           const errorMessage = error.message;
           
+          // PRIORITY: Check if there's a valid Action that should be executed
+          // This happens when LLM provides both action and final answer
+          const actionMatch = errorMessage.match(/Action:\s*(\w+)\s*\nAction Input:\s*(\{[\s\S]*?\})/i);
+          if (actionMatch && actionMatch[1] && actionMatch[2]) {
+            const actionName = actionMatch[1].trim();
+            const actionInput = actionMatch[2].trim();
+            
+            // Verify it's a valid tool
+            const validTools = tools.map(t => t.name);
+            if (validTools.includes(actionName)) {
+              this.logger.log(`🔧 Extracted valid action from parsing error: ${actionName}`);
+              // Return properly formatted action for the agent to execute
+              return `Thought: I need to execute the action\nAction: ${actionName}\nAction Input: ${actionInput}`;
+            }
+          }
+          
           // Extract the actual LLM output (before "Troubleshooting URL")
           const outputMatch = errorMessage.match(/Could not parse LLM output:\s*(.+?)(?:\n\nTroubleshooting|$)/is);
           if (outputMatch && outputMatch[1]) {
@@ -198,11 +214,12 @@ CRITICAL FORMAT RULES:
             }
           }
           
-          // Try to extract Final Answer if it exists in the error
+          // Try to extract Final Answer if it exists in the error (but only if no action was found)
           const finalAnswerMatch = errorMessage.match(/Final Answer:\s*(.+?)(?:\n\n|Troubleshooting|$)/is);
           if (finalAnswerMatch && finalAnswerMatch[1]) {
             const answer = finalAnswerMatch[1].trim();
-            if (answer.length > 10 && answer.length < 1000) {
+            // Only use this if there's no action in the message
+            if (answer.length > 10 && answer.length < 1000 && !errorMessage.includes('Action:')) {
               this.logger.log(`✅ Extracted Final Answer from parsing error`);
               return `Final Answer: ${answer}`;
             }
@@ -215,15 +232,6 @@ CRITICAL FORMAT RULES:
               const extractedContent = contentMatch[1].trim();
               this.logger.log(`✅ Extracted email content from parsing error`);
               return `Final Answer: ${extractedContent}`;
-            }
-          }
-          
-          // Check if it mentions success/completion
-          if (errorMessage.match(/sent|created|added|done|success|complete/i)) {
-            const successMatch = errorMessage.match(/(?:sent|created|added|done|success|complete)[^.!?]*[.!?]/i);
-            if (successMatch) {
-              this.logger.log(`✅ Extracted success message from parsing error`);
-              return `Final Answer: ${successMatch[0]}`;
             }
           }
           

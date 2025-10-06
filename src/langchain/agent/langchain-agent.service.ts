@@ -735,7 +735,8 @@ If no tools needed, skip to Final Answer directly.`],
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
       
       // Call the tool using the proper LangChain tool interface
-      const searchPromise = searchTool.invoke(searchParams);
+      // LangChain DynamicTool expects a string input, so we need to stringify the params
+      const searchPromise = searchTool.invoke(JSON.stringify(searchParams));
       
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Email search timeout')), 10000);
@@ -1095,7 +1096,7 @@ If no tools needed, skip to Final Answer directly.`],
       
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
       
-      const searchResult = await searchTool.invoke(searchParams);
+      const searchResult = await searchTool.invoke(JSON.stringify(searchParams));
       
       // Parse and format the results
       if (searchResult && searchResult.includes('No messages found')) {

@@ -310,7 +310,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { 
             inputType: typeof input,
             input: input,
-            inputKeys: input && typeof input === 'object' ? Object.keys(input) : 'N/A'
+            inputKeys: input && typeof input === 'object' ? Object.keys(input) : 'N/A',
+            inputStringified: JSON.stringify(input)
           });
 
           // Handle different argument formats from LangChain

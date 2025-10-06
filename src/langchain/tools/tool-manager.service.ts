@@ -402,6 +402,17 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           
           const result = await this.googleWorkspaceService.callTool(mcpTool.name!, parsedArgs);
           
+          // Check if result is an error or contains authentication requirements
+          // Don't format these - pass them through directly so the agent can handle them
+          if (typeof result === 'string' && 
+              (result.includes('Error calling tool') || 
+               result.includes('ACTION REQUIRED') ||
+               result.includes('Authentication Needed') ||
+               result.includes('Authorization URL'))) {
+            this.logger.debug(`Passing through error/auth result without formatting for ${mcpTool.name}`);
+            return result;
+          }
+          
           // Format result using the result formatter for human-friendly display
           return this.resultFormatter.formatToolResult(mcpTool.name!, result);
         } catch (error) {

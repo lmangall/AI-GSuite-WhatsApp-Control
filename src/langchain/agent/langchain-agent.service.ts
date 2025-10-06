@@ -6,7 +6,7 @@ import { AgentExecutor, createReactAgent } from 'langchain/agents';
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
-import { pull } from 'langchain/hub';
+// Removed hub import - using custom prompt instead
 
 import { IAgentService } from '../../agent/agent.interface';
 import { BaseAgentService } from '../../agent/base-agent.service';
@@ -84,8 +84,27 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       
       this.logger.log(`🔧 Creating agent executor with ${tools.length} tools for ${modelType} model`);
 
-      // Use the standard ReAct prompt from LangChain hub
-      const prompt = await pull<ChatPromptTemplate>("hwchase17/react-chat");
+      // Create a custom ReAct prompt
+      const prompt = ChatPromptTemplate.fromMessages([
+        ["system", `You are a helpful AI assistant with access to various tools. Use the tools available to help answer questions and complete tasks.
+
+Available tools: {tools}
+Tool names: {tool_names}
+
+When using tools, follow this format:
+Thought: I need to use a tool to help with this request.
+Action: tool_name
+Action Input: {{"parameter": "value"}}
+Observation: [tool result will appear here]
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer.
+Final Answer: [your response to the human]
+
+Begin!`],
+        ["placeholder", "{chat_history}"],
+        ["human", "{input}"],
+        ["assistant", "{agent_scratchpad}"]
+      ]);
 
       // Create the agent
       const agent = await createReactAgent({
@@ -533,8 +552,8 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       
       // Log each tool with details
       tools.forEach((tool, index) => {
-        this.logger.log(`   ${index + 1}. ${tool.name} (source: ${(tool as any).source || 'unknown'})`);
-        this.logger.debug(`      Description: ${tool.description}`);
+        this.logger.log(`   ${index + 1}. ${(tool as any).name} (source: ${(tool as any).source || 'unknown'})`);
+        this.logger.debug(`      Description: ${(tool as any).description}`);
       });
       
       return tools;

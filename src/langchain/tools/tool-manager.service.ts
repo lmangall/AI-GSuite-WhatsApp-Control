@@ -52,7 +52,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         if (conversionResult.success && conversionResult.tool) {
           discoveryResult.tools.push(conversionResult.tool);
           discoveryResult.successfulConversions++;
-          this.tools.set(conversionResult.tool.name, conversionResult.tool);
+          this.tools.set((conversionResult.tool as any).name, conversionResult.tool);
           this.logger.debug(`✅ Successfully converted: ${mcpTool.name}`);
         } else {
           discoveryResult.failedConversions++;
@@ -159,7 +159,6 @@ export class LangChainToolManagerService implements ILangChainToolManager {
     }) as LangChainTool;
 
     braveSearchTool.source = 'brave';
-    // DynamicTool expects a simple string input, not an object schema
     braveSearchTool.timeout = 15000;
     braveSearchTool.retries = 1;
 
@@ -201,7 +200,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         this.logger.log('🔍 Brave search is enabled, creating tool...');
         const braveSearchTool = this.createBraveSearchTool();
         allTools.push(braveSearchTool);
-        this.tools.set(braveSearchTool.name, braveSearchTool);
+        this.tools.set((braveSearchTool as any).name, braveSearchTool);
         this.logger.log('✅ Brave search tool created and added');
       } else {
         this.logger.warn('⚠️  Brave search is NOT enabled in config');
@@ -209,7 +208,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
 
       this.logger.log(`✅ Total tools available: ${allTools.length}`);
       allTools.forEach((tool, index) => {
-        this.logger.log(`   ${index + 1}. ${tool.name} (source: ${(tool as any).source || 'unknown'})`);
+        this.logger.log(`   ${index + 1}. ${(tool as any).name} (source: ${(tool as any).source || 'unknown'})`);
       });
       
       return allTools;
@@ -305,60 +304,127 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         };
       }
 
-      // Create LangChain tool using DynamicTool
+      // Create a custom tool class that properly handles the schema
+      const toolFunction = async (input: any): Promise<string> => {
+        try {
+          this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { 
+            inputType: typeof input,
+            input: input 
+          });
+
+          // Handle different argument formats from LangChain
+          let parsedArgs: Record<string, any> = {};
+          
+          // LangChain ReAct agent passes arguments as an object directly
+          if (input && typeof input === 'object' && !Array.isArray(input)) {
+            parsedArgs = { ...input };
+          } else if (typeof input === 'string') {
+            // Try to parse as JSON first
+            if (input.trim().startsWith('{') || input.trim().startsWith('[')) {
+              try {
+                parsedArgs = JSON.parse(input);
+              } catch (parseError) {
+                this.logger.warn(`Failed to parse JSON input for ${mcpTool.name}, treating as string input`);
+                // Map to the first required parameter or a common parameter name
+                if (mcpTool.inputSchema?.properties) {
+                  const properties = Object.keys(mcpTool.inputSchema.properties);
+                  const requiredProps = mcpTool.inputSchema.required || [];
+                  
+                  if (requiredProps.length > 0) {
+                    parsedArgs[requiredProps[0]] = input;
+                  } else if (properties.length === 1) {
+                    parsedArgs[properties[0]] = input;
+                  } else {
+                    // Look for common parameter names
+                    const commonNames = ['query', 'input', 'message', 'text', 'content', 'user_google_email'];
+                    const matchedName = properties.find(prop => commonNames.includes(prop.toLowerCase()));
+                    if (matchedName) {
+                      parsedArgs[matchedName] = input;
+                    } else {
+                      parsedArgs[properties[0]] = input;
+                    }
+                  }
+                } else {
+                  parsedArgs = { input: input };
+                }
+              }
+            } else {
+              // Simple string - map to appropriate parameter
+              if (mcpTool.inputSchema?.properties) {
+                const properties = Object.keys(mcpTool.inputSchema.properties);
+                const requiredProps = mcpTool.inputSchema.required || [];
+                
+                if (requiredProps.length > 0) {
+                  parsedArgs[requiredProps[0]] = input;
+                } else if (properties.length === 1) {
+                  parsedArgs[properties[0]] = input;
+                } else {
+                  // Look for common parameter names
+                  const commonNames = ['query', 'input', 'message', 'text', 'content', 'user_google_email'];
+                  const matchedName = properties.find(prop => commonNames.includes(prop.toLowerCase()));
+                  if (matchedName) {
+                    parsedArgs[matchedName] = input;
+                  } else {
+                    parsedArgs[properties[0]] = input;
+                  }
+                }
+              } else {
+                parsedArgs = { input: input };
+              }
+            }
+          } else {
+            // Null, undefined, or other types
+            parsedArgs = {};
+          }
+
+          // Clean up null/undefined values that might cause schema issues
+          Object.keys(parsedArgs).forEach(key => {
+            if (parsedArgs[key] === null || parsedArgs[key] === undefined) {
+              delete parsedArgs[key];
+            }
+          });
+
+          // Auto-inject user_google_email for Gmail tools if not provided
+          if (mcpTool.name && mcpTool.name.includes('gmail') && !parsedArgs.user_google_email) {
+            // Try to get from environment or use a default
+            const defaultEmail = process.env.DEFAULT_GOOGLE_EMAIL || 'user@gmail.com';
+            parsedArgs.user_google_email = defaultEmail;
+            this.logger.debug(`Auto-injected user_google_email: ${defaultEmail} for tool: ${mcpTool.name}`);
+          }
+
+          this.logger.debug(`Calling MCP tool with parsed args:`, { 
+            toolName: mcpTool.name,
+            parsedArgs: parsedArgs 
+          });
+          
+          const result = await this.googleWorkspaceService.callTool(mcpTool.name!, parsedArgs);
+          
+          // Format result using the result formatter for human-friendly display
+          return this.resultFormatter.formatToolResult(mcpTool.name!, result);
+        } catch (error) {
+          this.logger.error(`Error executing MCP tool ${mcpTool.name}:`, error);
+          this.logger.error(`Error details:`, {
+            message: error.message,
+            stack: error.stack,
+            toolName: mcpTool.name,
+            inputReceived: input,
+            inputType: typeof input
+          });
+          // Return a more user-friendly error message
+          return `Sorry, couldn't execute ${mcpTool.name}. ${error.message}`;
+        }
+      };
+
+      // Create LangChain tool using DynamicTool with simplified approach
       const langChainTool = new DynamicTool({
         name: mcpTool.name || 'unknown_tool',
         description: mcpTool.description || `MCP tool: ${mcpTool.name}`,
-        func: async (args: string): Promise<string> => {
-          try {
-            // Improved argument parsing with better error handling
-            let parsedArgs: Record<string, any> = {};
-            
-            if (typeof args === 'string') {
-              if (args.trim().startsWith('{') || args.trim().startsWith('[')) {
-                try {
-                  parsedArgs = JSON.parse(args);
-                } catch (parseError) {
-                  this.logger.warn(`Failed to parse JSON args for ${mcpTool.name}, using as string:`, parseError.message);
-                  parsedArgs = { input: args };
-                }
-              } else {
-                // Simple string input
-                parsedArgs = { input: args };
-              }
-            } else if (args && typeof args === 'object') {
-              parsedArgs = args as any;
-            } else {
-              parsedArgs = {};
-            }
-
-            // Clean up null/undefined values that might cause schema issues
-            Object.keys(parsedArgs).forEach(key => {
-              if (parsedArgs[key] === null || parsedArgs[key] === undefined) {
-                delete parsedArgs[key];
-              }
-            });
-
-            this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { 
-              originalArgs: args, 
-              parsedArgs: parsedArgs 
-            });
-            
-            const result = await this.googleWorkspaceService.callTool(mcpTool.name!, parsedArgs);
-            
-            // Format result using the result formatter for human-friendly display
-            return this.resultFormatter.formatToolResult(mcpTool.name!, result);
-          } catch (error) {
-            this.logger.error(`Error executing MCP tool ${mcpTool.name}:`, error);
-            // Return a more user-friendly error message
-            return `Sorry, couldn't execute ${mcpTool.name}. ${error.message}`;
-          }
-        }
+        func: toolFunction
       }) as LangChainTool;
 
       // Add additional properties
       langChainTool.source = 'mcp';
-      langChainTool.schema = mcpTool.inputSchema || {};
+      // Don't set schema directly - let LangChain handle it
       langChainTool.timeout = this.configService.getLangChainConfig().toolTimeout || 10000; // Use config timeout, default 10s
       langChainTool.retries = 1; // Reduce retries for faster response
 
@@ -388,24 +454,24 @@ export class LangChainToolManagerService implements ILangChainToolManager {
   validateToolSchema(tool: LangChainTool): boolean {
     try {
       // Basic validation
-      if (!tool.name || typeof tool.name !== 'string') {
+      if (!(tool as any).name || typeof (tool as any).name !== 'string') {
         this.logger.warn(`Tool validation failed: invalid name`);
         return false;
       }
 
-      if (!tool.description || typeof tool.description !== 'string') {
-        this.logger.warn(`Tool validation failed: invalid description for ${tool.name}`);
+      if (!(tool as any).description || typeof (tool as any).description !== 'string') {
+        this.logger.warn(`Tool validation failed: invalid description for ${(tool as any).name}`);
         return false;
       }
 
-      if (typeof tool.call !== 'function') {
-        this.logger.warn(`Tool validation failed: missing call method for ${tool.name}`);
+      if (typeof (tool as any).call !== 'function') {
+        this.logger.warn(`Tool validation failed: missing call method for ${(tool as any).name}`);
         return false;
       }
 
       return true;
     } catch (error) {
-      this.logger.error(`Tool validation error for ${tool.name}:`, error);
+      this.logger.error(`Tool validation error for ${(tool as any).name}:`, error);
       return false;
     }
   }
@@ -661,12 +727,12 @@ export class LangChainToolManagerService implements ILangChainToolManager {
       const timeoutId = setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
-          this.logger.error(`⏱️ Tool ${tool.name} execution timed out after ${timeout}ms`);
+          this.logger.error(`⏱️ Tool ${(tool as any).name} execution timed out after ${timeout}ms`);
           reject(new Error(`Tool execution timed out after ${timeout}ms`));
         }
       }, timeout);
 
-      tool.call(args)
+      (tool as any).call(args)
         .then(result => {
           if (!isResolved) {
             isResolved = true;
@@ -678,7 +744,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
-            this.logger.error(`❌ Tool ${tool.name} execution failed:`, error);
+            this.logger.error(`❌ Tool ${(tool as any).name} execution failed:`, error);
             reject(error);
           }
         });

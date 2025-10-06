@@ -14,6 +14,7 @@ import { LangChainConfigService } from '../config/langchain-config.service';
 import { LangChainToolManagerService } from '../tools/tool-manager.service';
 import { GreetingResponseService } from '../responses/greeting-response.service';
 import { EmailHandlerService } from '../services/email-handler.service';
+import { BraveService } from '../../webSearch/brave.service';
 import { LangChainConfig, MessageContext, ConversationMessage } from '../interfaces/langchain-config.interface';
 
 interface LangChainConversationMessage extends ConversationMessage {
@@ -38,6 +39,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     private toolManager: LangChainToolManagerService,
     private greetingService: GreetingResponseService,
     private emailHandler: EmailHandlerService,
+    private braveService: BraveService,
   ) {
     super(configService);
     this.config = this.langChainConfigService.getLangChainConfig();
@@ -1170,9 +1172,26 @@ CRITICAL:
   private async tryFastPathResponse(message: string, userId: string, requestId: string): Promise<string | null> {
     const normalizedMessage = message.toLowerCase().trim();
 
-    // Check for simple greetings
-    if (this.greetingService.isSimpleGreeting(message)) {
+    // Check for simple greetings - should be INSTANT
+    const simpleGreetings = [
+      /^hi\s*jarvis?$/i,
+      /^hello\s*jarvis?$/i,
+      /^hey\s*jarvis?$/i,
+      /^yo\s*jarvis?$/i,
+      /^sup\s*jarvis?$/i,
+      /^hi$/i,
+      /^hello$/i,
+      /^hey$/i,
+    ];
+
+    if (simpleGreetings.some(pattern => pattern.test(message.trim()))) {
       this.logger.log(`⚡ [${requestId}] Fast-path: Simple greeting detected`);
+      return this.greetingService.generateQuickGreeting(message);
+    }
+
+    // Check for greetings with questions
+    if (this.greetingService.isSimpleGreeting(message)) {
+      this.logger.log(`⚡ [${requestId}] Fast-path: Greeting with question detected`);
       const history = this.getUserHistory(userId);
       const shouldShowFull = this.greetingService.shouldShowFullGreeting(message, history);
 
@@ -1218,25 +1237,66 @@ CRITICAL:
       return responses[Math.floor(Math.random() * responses.length)];
     }
 
-    // Check for email requests - try fast email processing
-    const emailPatterns = [
-      /^check.*email/i,
-      /^show.*email/i,
-      /^get.*email/i,
-      /^read.*email/i,
-      /^my.*email/i,
-      /^email/i,
-      /^unread/i
+    // Check for web search requests - should be INSTANT
+    const webSearchPatterns = [
+      /what'?s?\s+(the\s+)?news/i,
+      /what'?s?\s+happening/i,
+      /search\s+for/i,
+      /look\s+up/i,
+      /find\s+out/i,
+      /tell\s+me\s+about/i,
+      /weather\s+in/i,
+      /news\s+(in|about)/i,
     ];
 
-    // DISABLED: Fast-path email processing - broken, needs proper implementation
-    // The search returns only IDs, not content. Agent should handle this properly.
-    // if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {
-    //   ...
-    // }
+    if (webSearchPatterns.some(pattern => pattern.test(message))) {
+      this.logger.log(`⚡ [${requestId}] Fast-path: Web search detected`);
+      return await this.handleWebSearchDirect(message, requestId);
+    }
 
     // No fast-path available
     return null;
+  }
+
+  /**
+   * Handle web search directly without agent
+   */
+  private async handleWebSearchDirect(message: string, requestId: string): Promise<string> {
+    try {
+      // Extract search query
+      const query = message
+        .replace(/^(what'?s?\s+(the\s+)?|search\s+for\s+|look\s+up\s+|find\s+out\s+|tell\s+me\s+about\s+)/i, '')
+        .trim();
+
+      this.logger.log(`🔍 [${requestId}] Direct web search for: "${query}"`);
+
+      const searchResult = await this.braveService.search({
+        query,
+        count: 3,
+        country: 'us',
+        search_lang: 'en',
+      });
+
+      // Format results
+      if (!searchResult?.web?.results || searchResult.web.results.length === 0) {
+        return `No results found for "${query}" 🤷`;
+      }
+
+      const results = searchResult.web.results.slice(0, 3);
+      let response = `🔍 Here's what I found about "${query}":\n\n`;
+
+      results.forEach((result: any, index: number) => {
+        const title = result.title || 'No title';
+        const description = result.description || 'No description';
+        response += `${index + 1}. ${title}\n${description.substring(0, 150)}${description.length > 150 ? '...' : ''}\n\n`;
+      });
+
+      return response.trim();
+
+    } catch (error) {
+      this.logger.error(`❌ [${requestId}] Direct web search failed:`, error);
+      return `Sorry, I couldn't search for that right now. ${error.message}`;
+    }
   }
 
   /**

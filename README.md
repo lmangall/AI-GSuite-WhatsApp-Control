@@ -3,16 +3,17 @@ Jarvis - WhatsApp AI Agent with Google Workspace Integration
 Jarvis is your personal AI assistant accessible through WhatsApp, capable of managing your entire Google Workspace, performing web searches, and engaging in natural conversations.
 
 **Featuring:**
- 🪺 NestJS - *dependency injection go brrr~*
- 🍆 MCP - *oh yeah, we're that cutting edge*
- 🦜 LangChain - *one AI call is never enough*
- 🌐 Fully Deployed - *not on localhost, actual internet*
- 📱 WhatsApp - *building a UI is for you know, front-end people*
+🪺 NestJS - *dependency injection go brrr~*
+🍆 MCP - *oh yeah, we're that cutting edge*
+🦜 LangChain - *one AI call is never enough*
+🌐 Fully Deployed - *not on localhost, actual internet*
+📱 WhatsApp - *building a UI is for you know, front-end people*
 
 
  The agent have his own Google Calendar and it can be used as a personification of the agent, to make it more tangible but also have an overview of the scheduled tasks. The agent can decide alone to add to its calendar
 
 ## Discovery Steps:
+(What I did to arrive to this result)
 
 ### Phase 1: Individual Testing & Validation
 
@@ -63,20 +64,52 @@ It's just a weekend built demo so I am "testing in prod". I ssh into the EC2 on 
 Limova team communicated that the personification of the agents was a game changer. I added WhatsApp typing indicators ("three dots") while processing requests, This way users "waits" more easilly, but also it gives a great feeling
 
 
-
-### Webhook(s)
-
 ## Flow
 
+```
 WhatsApp Message (webhook) → Agent Factory → LangChain Agent → Intent Detection → Agent Executor
            ↑                                                                           ↓
 WhatsApp Message (API)   ←   Memory  ←  Prompt Manager  ←  Tool Manager  ←  Tools (MCP, Brave)
+```
 
 ## Structure
 
+
 ```
-src/
-├── 
+jarvis/
+├── src/
+│   ├── agent/                    # Agent factory and legacy agents
+│   │   ├── agent-factory.service.ts
+│   │   ├── gemini-agent.service.ts
+│   │   └── openai-agent.service.ts
+│   ├── langchain/                # LangChain integration
+│   │   ├── agent/                # Main agent service
+│   │   ├── circuit-breaker/      # Resilience patterns
+│   │   ├── executor/             # Agent execution
+│   │   ├── intent/               # Intent detection & routing
+│   │   ├── memory/               # Conversation memory
+│   │   ├── monitoring/           # Health & metrics
+│   │   ├── prompts/              # Prompt management
+│   │   ├── tools/                # Tool management
+│   │   └── langchain-router.service.ts
+│   ├── mcp/                      # MCP client integration
+│   │   └── google-workspace-mcp.service.ts
+│   ├── webSearch/                # Brave Search integration
+│   │   └── brave.service.ts
+│   ├── whapi/                    # WhatsApp API integration
+│   │   ├── whapi.controller.ts
+│   │   └── whapi.service.ts
+│   ├── app.module.ts
+│   └── main.ts
+├── config/
+│   ├── langchain.example.env     # Configuration template
+│   └── prompts/                  # Custom prompt templates
+├── docs/
+│   ├── LANGCHAIN_INTEGRATION.md  # Detailed integration docs
+│   └── LANGCHAIN_INTEGRATION_VERIFICATION.md
+├── package.json
+├── tsconfig.json
+└── README.md
 ```
 
 ## Stack
@@ -111,7 +144,6 @@ Whapi API instead of a front-end (official API from meta necessitates business v
 
 
 
-## 🏷️ Tech Stack
 
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)

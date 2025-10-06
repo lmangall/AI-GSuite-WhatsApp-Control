@@ -101,12 +101,13 @@ PERSONALITY:
 WHEN TO USE TOOLS:
 - Emails: Use search_gmail_messages + get_gmail_messages_content_batch
 - Web search: Use brave_search for current info, news, weather
-- Calendar: Use calendar tools for events and scheduling
+- Calendar: Use create_event, modify_event, get_events for scheduling
 - For general questions, knowledge, or chat: Just answer directly!
 
-CRITICAL RULES FOR EMAILS:
+CRITICAL RULES:
 1. Leo's email: l.mangallon@gmail.com (NEVER ask for this)
-2. NEVER show message IDs or links - only subjects and senders
+2. For calendar events, use ISO format for dates: "2025-10-07T08:00:00" for 8am on Oct 7, 2025
+3. Calendar ID is always "primary" unless specified
 
 Available tools: {tools}
 Tool names: {tool_names}
@@ -118,13 +119,18 @@ Thought: [brief thought]
 Action: [tool_name]
 Action Input: {{"parameter": "value"}}
 
+After tool result:
+Thought: [brief thought about result]
+Final Answer: [your response]
+
 When answering directly (no tool needed):
 Final Answer: [your natural, conversational response]
 
 CRITICAL: 
 - Keep Final Answer natural and conversational
-- Don't add meta-commentary like "Here are your emails:" or "Let me know..."
-- Just give the answer like you're texting a friend`],
+- Don't add meta-commentary
+- Just give the answer like you're texting a friend
+- ONE action per iteration - don't chain multiple actions in one response`],
         ["placeholder", "{chat_history}"],
         ["human", "{input}"],
         ["assistant", "{agent_scratchpad}"]
@@ -142,7 +148,7 @@ CRITICAL:
         agent,
         tools,
         verbose: true, // Enable verbose for debugging
-        maxIterations: 5, // Allow enough iterations for email workflow (search + fetch + format)
+        maxIterations: 8, // Increased for complex multi-step tasks like calendar events
         returnIntermediateSteps: true,
         handleParsingErrors: (error: Error) => {
           // Custom parsing error handler - extract useful content from malformed responses
@@ -160,6 +166,12 @@ CRITICAL:
               this.logger.log(`✅ Extracted useful content from parsing error`);
               return `Final Answer: ${extractedContent}`;
             }
+          }
+          
+          // Check if it's trying to create an event
+          if (errorMessage.includes('create_event') || errorMessage.includes('calendar')) {
+            this.logger.log(`🗓️ Calendar action detected in parsing error, allowing retry`);
+            return `Invalid format. Use this format:\nThought: [what to do]\nAction: create_event\nAction Input: {parameters}`;
           }
           
           // Default: ask the agent to reformat properly
@@ -1255,6 +1267,22 @@ CRITICAL:
     if (webSearchPatterns.some(pattern => pattern.test(message))) {
       this.logger.log(`⚡ [${requestId}] Fast-path: Web search detected`);
       return await this.handleWebSearchDirect(message, requestId);
+    }
+
+    // Calendar requests should go through agent (complex parsing needed)
+    // But we can detect them early to ensure proper routing
+    const calendarPatterns = [
+      /create.*event/i,
+      /add.*calendar/i,
+      /schedule.*meeting/i,
+      /remind.*me/i,
+      /set.*reminder/i,
+    ];
+
+    if (calendarPatterns.some(pattern => pattern.test(message))) {
+      this.logger.log(`🗓️ [${requestId}] Calendar request detected, routing to agent`);
+      // Return null to let it go through the full agent with tools
+      return null;
     }
 
     // No fast-path available

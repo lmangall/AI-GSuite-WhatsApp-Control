@@ -1114,6 +1114,8 @@ If no tools needed, skip to Final Answer directly.`],
       const searchResult = await searchTool.invoke(JSON.stringify(searchParams));
       
       // Check if this is an authentication request
+      this.logger.debug(`🔍 [${requestId}] Search result preview: ${searchResult?.substring(0, 200)}...`);
+      
       if (searchResult && searchResult.includes('ACTION REQUIRED: Google Authentication Needed')) {
         this.logger.log(`🔐 [${requestId}] Authentication required, forwarding auth link to user`);
         
@@ -1121,10 +1123,12 @@ If no tools needed, skip to Final Answer directly.`],
         const authUrlMatch = searchResult.match(/Authorization URL: (https:\/\/[^\s\n]+)/);
         if (authUrlMatch && authUrlMatch[1]) {
           const authUrl = authUrlMatch[1];
+          this.logger.log(`🔐 [${requestId}] Extracted auth URL: ${authUrl.substring(0, 100)}...`);
           return `🔐 **Google Authentication Required**\n\nTo access your Gmail, please click this link to authorize:\n\n${authUrl}\n\nAfter authorizing, try your request again!`;
         }
         
         // Fallback if URL extraction fails
+        this.logger.warn(`🔐 [${requestId}] Could not extract auth URL from response`);
         return `🔐 **Google Authentication Required**\n\nI need permission to access your Gmail. Please check the logs for the authorization link, or try again in a moment.`;
       }
       

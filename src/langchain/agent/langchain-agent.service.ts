@@ -316,6 +316,29 @@ CRITICAL FORMAT RULES:
       this.logger.log(`🔄 [${requestId}] Processing message for user ${userId} with ${this.config.defaultModel} model`);
       this.logger.log(`📝 [${requestId}] Message: "${userMessage}"`);
 
+      // Fast-path for simple conversational questions (opinions, thoughts, etc.)
+      if (this.isSimpleConversationalQuestion(userMessage)) {
+        this.logger.log(`💬 [${requestId}] Simple conversational question detected, answering directly`);
+        const conversationalResponse = await this.handleConversationalQuestion(userMessage, userId, requestId);
+        
+        const duration = Date.now() - startTime;
+        this.logger.log(`⚡ [${requestId}] Conversational response completed in ${duration}ms`);
+
+        // Add to history
+        this.addToHistory(userId, {
+          role: 'user',
+          content: userMessage,
+          timestamp: new Date(),
+        });
+        this.addToHistory(userId, {
+          role: 'assistant',
+          content: conversationalResponse,
+          timestamp: new Date(),
+        });
+
+        return conversationalResponse;
+      }
+
       // Fast-path for simple greetings and capability questions
       const fastResponse = await this.tryFastPathResponse(userMessage, userId, requestId);
       if (fastResponse) {
@@ -946,6 +969,63 @@ CRITICAL FORMAT RULES:
     // Fallback: count message indicators
     const messageIndicators = searchResult.match(/Message ID:/g);
     return messageIndicators ? messageIndicators.length : 0;
+  }
+
+  /**
+   * Check if message is a simple conversational question
+   */
+  private isSimpleConversationalQuestion(message: string): boolean {
+    const normalized = message.toLowerCase().trim();
+    const conversationalPatterns = [
+      /what do you think/i,
+      /what's your opinion/i,
+      /what.*your thoughts/i,
+      /how do you feel/i,
+      /do you like/i,
+      /do you think/i,
+    ];
+
+    return conversationalPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  /**
+   * Handle conversational questions directly using the LLM
+   */
+  private async handleConversationalQuestion(message: string, userId: string, requestId: string): Promise<string> {
+    try {
+      this.logger.log(`💬 [${requestId}] Answering conversational question directly`);
+
+      // Get recent history for context
+      const history = this.getUserHistory(userId);
+      const recentHistory = history.slice(-3); // Last 3 messages for context
+
+      // Build context from history
+      let contextStr = '';
+      if (recentHistory.length > 0) {
+        contextStr = '\n\nRecent conversation:\n' + recentHistory.map(msg => 
+          `${msg.role === 'user' ? 'Leo' : 'You'}: ${msg.content}`
+        ).join('\n');
+      }
+
+      // Use the primary model directly without agent framework
+      const model = this.getPrimaryModel();
+      
+      const prompt = `You are Jarvis, Leo's casual AI assistant. Answer this question naturally and conversationally.${contextStr}
+
+Leo: ${message}
+You:`;
+
+      const response = await model.invoke(prompt);
+      const answer = response.content.toString().trim();
+
+      this.logger.log(`✅ [${requestId}] Conversational response generated`);
+      return answer;
+
+    } catch (error) {
+      this.logger.error(`❌ [${requestId}] Conversational question failed:`, error);
+      // Fallback to a generic response
+      return "I'm not sure about that one. What else can I help you with?";
+    }
   }
 
   /**

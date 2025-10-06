@@ -117,27 +117,29 @@ export class WebhookController {
       await this.whapiService.setTyping(message.chat_id, true);
       this.logger.log(`[${requestId}] ⌨️  Typing indicator started`);
 
-      try {
-        // Process message with AI agent
-        const aiResponse = await this.agentService.processMessage(userId, originalMessage, requestId);
+      // Process message with AI agent
+      const aiResponse = await this.agentService.processMessage(userId, originalMessage, requestId);
 
-        // Send AI response back to WhatsApp
-        const sent = await this.whapiService.sendMessage(senderPhone, aiResponse);
+      // Stop typing indicator
+      await this.whapiService.setTyping(message.chat_id, false);
 
-        if (sent) {
-          this.logger.log(`[${requestId}] ✅ AI response sent to ${senderPhone}`);
-        } else {
-          this.logger.error(`[${requestId}] ❌ Failed to send AI response to ${senderPhone}`);
-        }
-      } finally {
-        // Stop typing indicator
-        await this.whapiService.setTyping(message.chat_id, false);
+      // Send AI response back to WhatsApp
+      const sent = await this.whapiService.sendMessage(senderPhone, aiResponse);
+
+      if (sent) {
+        this.logger.log(`[${requestId}] ✅ AI response sent to ${senderPhone}`);
+      } else {
+        this.logger.error(`[${requestId}] ❌ Failed to send AI response to ${senderPhone}`);
       }
     } catch (error) {
       this.logger.error(`[${requestId}] ❌ Error processing message: ${error.message}`, error.stack);
       
       // Stop typing indicator on error
-      await this.whapiService.setTyping(message.chat_id, false);
+      try {
+        await this.whapiService.setTyping(message.chat_id, false);
+      } catch (e) {
+        // Ignore typing stop errors
+      }
       
       // Send error message to user
       try {

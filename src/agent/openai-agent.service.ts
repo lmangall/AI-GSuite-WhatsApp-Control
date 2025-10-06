@@ -5,26 +5,19 @@ import { MCPService } from '../mcp/mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { IAgentService } from './agent.interface';
 import { SYSTEM_PROMPT } from './agent.prompts';
-
-interface ConversationHistory {
-  userId: string;
-  messages: OpenAI.Chat.ChatCompletionMessageParam[];
-  lastActivity: Date;
-}
+import { BaseAgentService } from './base-agent.service';
 
 @Injectable()
-export class OpenAIAgentService implements IAgentService, OnModuleInit {
-  private readonly logger = new Logger(OpenAIAgentService.name);
+export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatCompletionMessageParam> implements IAgentService, OnModuleInit {
+  protected readonly logger = new Logger(OpenAIAgentService.name);
   private client: OpenAI;
-  private conversationHistory: Map<string, ConversationHistory> = new Map();
-  private readonly HISTORY_LIMIT = 20;
-  private readonly CLEANUP_INTERVAL = 1000 * 60 * 60; // 1 hour
-  private readonly HISTORY_EXPIRY = 1000 * 60 * 60 * 24; // 24 hours
 
   constructor(
-    private configService: ConfigService,
+    configService: ConfigService,
     private mcpService: MCPService,
-  ) {}
+  ) {
+    super(configService);
+  }
 
   async onModuleInit() {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
@@ -35,50 +28,7 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
     this.client = new OpenAI({ apiKey });
     this.logger.log('✅ OpenAI client initialized');
 
-    setInterval(() => this.cleanupOldConversations(), this.CLEANUP_INTERVAL);
-  }
-
-  private cleanupOldConversations() {
-    const now = new Date();
-    let cleaned = 0;
-
-    for (const [userId, history] of this.conversationHistory.entries()) {
-      const timeDiff = now.getTime() - history.lastActivity.getTime();
-      if (timeDiff > this.HISTORY_EXPIRY) {
-        this.conversationHistory.delete(userId);
-        cleaned++;
-      }
-    }
-
-    if (cleaned > 0) {
-      this.logger.log(`🧹 Cleaned up ${cleaned} expired conversation(s)`);
-    }
-  }
-
-  private getUserHistory(userId: string): OpenAI.Chat.ChatCompletionMessageParam[] {
-    const history = this.conversationHistory.get(userId);
-    return history?.messages || [];
-  }
-
-  private addToHistory(userId: string, message: OpenAI.Chat.ChatCompletionMessageParam) {
-    let history = this.conversationHistory.get(userId);
-
-    if (!history) {
-      history = {
-        userId,
-        messages: [],
-        lastActivity: new Date(),
-      };
-      this.conversationHistory.set(userId, history);
-    }
-
-    history.messages.push(message);
-
-    if (history.messages.length > this.HISTORY_LIMIT) {
-      history.messages = history.messages.slice(-this.HISTORY_LIMIT);
-    }
-
-    history.lastActivity = new Date();
+    this.startCleanupInterval();
   }
 
   private convertMCPToolsToOpenAI(mcpTools: Tool[]): OpenAI.Chat.ChatCompletionTool[] {
@@ -96,16 +46,13 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
     try {
       this.logger.log(`[${requestId}] 🤖 Processing with OpenAI for user: ${userId}`);
 
-      // Get available MCP tools
       const mcpTools = await this.mcpService.listTools();
       this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
 
-      // Convert MCP tools to OpenAI format
       const openAITools = this.convertMCPToolsToOpenAI(mcpTools);
 
       const history = this.getUserHistory(userId);
 
-      // Build messages array for chat completion
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...history,
@@ -122,7 +69,6 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
 
       let assistantMessage = response.choices[0].message;
       
-      // Handle tool calls loop (similar to Gemini's function call loop)
       let functionCallCount = 0;
       const MAX_FUNCTION_CALLS = 5;
 
@@ -130,10 +76,8 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
         functionCallCount++;
         this.logger.log(`[${requestId}] 🔧 Function call #${functionCallCount}: ${assistantMessage.tool_calls.length} tool(s) to execute`);
 
-        // Add assistant message with tool calls to messages
         messages.push(assistantMessage);
 
-        // Execute each tool call
         const toolResults = await Promise.all(
           assistantMessage.tool_calls.map(async (toolCall) => {
             this.logger.log(`[${requestId}] ⚙️  Executing tool: ${toolCall.function.name}`);
@@ -163,12 +107,10 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
           })
         );
 
-        // Add tool results to messages
         messages.push(...toolResults);
 
-        // Send tool results back to OpenAI
         response = await this.client.chat.completions.create({
-          model: 'gpt-4',
+          model: 'gpt-5-nano',
           messages: messages,
           tools: openAITools,
         });
@@ -187,7 +129,6 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
       const finalResponse = assistantMessage.content || 'No response generated';
       this.logger.log(`[${requestId}] 📤 OpenAI response: "${finalResponse.substring(0, 100)}${finalResponse.length > 100 ? '...' : ''}"`);
 
-      // Save to history (only user and final assistant messages, not tool calls)
       this.addToHistory(userId, { role: 'user', content: userMessage });
       this.addToHistory(userId, { role: 'assistant', content: finalResponse });
 
@@ -196,22 +137,5 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
       this.logger.error(`[${requestId}] ❌ Error processing with OpenAI:`, error);
       throw new Error(`Failed to process message with OpenAI: ${error.message}`);
     }
-  }
-
-  clearHistory(userId: string) {
-    this.conversationHistory.delete(userId);
-    this.logger.log(`🗑️  Cleared conversation history for user: ${userId}`);
-  }
-
-  getHistoryStats(): { totalUsers: number; totalMessages: number } {
-    let totalMessages = 0;
-    for (const history of this.conversationHistory.values()) {
-      totalMessages += history.messages.length;
-    }
-
-    return {
-      totalUsers: this.conversationHistory.size,
-      totalMessages,
-    };
   }
 }

@@ -5,27 +5,20 @@ import { MCPService } from '../mcp/mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { IAgentService } from './agent.interface';
 import { SYSTEM_PROMPT } from './agent.prompts';
-
-interface ConversationHistory {
-  userId: string;
-  messages: Content[];
-  lastActivity: Date;
-}
+import { BaseAgentService } from './base-agent.service';
 
 @Injectable()
-export class GeminiAgentService implements IAgentService, OnModuleInit {
-  private readonly logger = new Logger(GeminiAgentService.name);
+export class GeminiAgentService extends BaseAgentService<Content> implements IAgentService, OnModuleInit {
+  protected readonly logger = new Logger(GeminiAgentService.name);
   private genAI: GoogleGenerativeAI;
   private model: any;
-  private conversationHistory: Map<string, ConversationHistory> = new Map();
-  private readonly HISTORY_LIMIT = 20; // Keep last 20 messages per user
-  private readonly CLEANUP_INTERVAL = 1000 * 60 * 60; // 1 hour
-  private readonly HISTORY_EXPIRY = 1000 * 60 * 60 * 24; // 24 hours
 
   constructor(
-    private configService: ConfigService,
+    configService: ConfigService,
     private mcpService: MCPService,
-  ) {}
+  ) {
+    super(configService);
+  }
 
   async onModuleInit() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -36,25 +29,7 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.logger.log('✅ Gemini AI initialized');
 
-    // Start cleanup interval for old conversations
-    setInterval(() => this.cleanupOldConversations(), this.CLEANUP_INTERVAL);
-  }
-
-  private cleanupOldConversations() {
-    const now = new Date();
-    let cleaned = 0;
-
-    for (const [userId, history] of this.conversationHistory.entries()) {
-      const timeDiff = now.getTime() - history.lastActivity.getTime();
-      if (timeDiff > this.HISTORY_EXPIRY) {
-        this.conversationHistory.delete(userId);
-        cleaned++;
-      }
-    }
-
-    if (cleaned > 0) {
-      this.logger.log(`🧹 Cleaned up ${cleaned} expired conversation(s)`);
-    }
+    this.startCleanupInterval();
   }
 
   private sanitizeSchema(schema: any): any {
@@ -62,12 +37,10 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
 
     let sanitized = { ...schema };
 
-    // Remove unsupported fields
     delete sanitized.additionalProperties;
     delete sanitized.$schema;
     delete sanitized.default;
 
-    // Handle anyOf/oneOf - take the first option
     if (sanitized.anyOf) {
       sanitized = { ...sanitized, ...sanitized.anyOf[0] };
       delete sanitized.anyOf;
@@ -77,7 +50,6 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
       delete sanitized.oneOf;
     }
 
-    // Recursively sanitize properties
     if (sanitized.properties) {
       const cleanProps: any = {};
       for (const [key, value] of Object.entries(sanitized.properties)) {
@@ -86,7 +58,6 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
       sanitized.properties = cleanProps;
     }
 
-    // Recursively sanitize items (for arrays)
     if (sanitized.items) {
       sanitized.items = this.sanitizeSchema(sanitized.items);
     }
@@ -113,75 +84,43 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
     return [{ functionDeclarations }];
   }
 
-  private getUserHistory(userId: string): Content[] {
-    const history = this.conversationHistory.get(userId);
-    if (!history?.messages) return [];
-    
-    // Filter out function/tool messages - only keep user and model messages
-    // Gemini history must start with 'user' role and alternate user/model
-    return history.messages.filter(msg => msg.role === 'user' || msg.role === 'model');
+  private filterHistoryForGemini(userId: string): Content[] {
+    const history = super.getUserHistory(userId);
+    return history.filter(msg => msg.role === 'user' || msg.role === 'model');
   }
 
-  private addToHistory(userId: string, role: 'user' | 'model', text: string) {
-    let history = this.conversationHistory.get(userId);
-    
-    if (!history) {
-      history = {
-        userId,
-        messages: [],
-        lastActivity: new Date(),
-      };
-      this.conversationHistory.set(userId, history);
-    }
-
-    // Only add user and model messages to history (no function calls)
+  private addGeminiMessage(userId: string, role: 'user' | 'model', text: string) {
     if (role === 'user' || role === 'model') {
-      history.messages.push({
+      super.addToHistory(userId, {
         role,
         parts: [{ text }],
       });
-
-      // Keep only last N messages
-      if (history.messages.length > this.HISTORY_LIMIT) {
-        history.messages = history.messages.slice(-this.HISTORY_LIMIT);
-      }
     }
-
-    history.lastActivity = new Date();
   }
 
   async processMessage(userId: string, userMessage: string, requestId: string): Promise<string> {
     try {
       this.logger.log(`[${requestId}] 🤖 Processing message with Gemini for user: ${userId}`);
 
-      // Get available MCP tools
       const mcpTools = await this.mcpService.listTools();
       this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
 
-      // Convert MCP tools to Gemini format
       const geminiTools = this.convertMCPToolsToGemini(mcpTools);
 
-      // Initialize model with tools and system instruction
       this.model = this.genAI.getGenerativeModel({
         model: 'gemini-2.0-flash-exp',
         tools: geminiTools,
         systemInstruction: SYSTEM_PROMPT,
       });
 
-      // Get conversation history
-      const history = this.getUserHistory(userId);
+      const history = this.filterHistoryForGemini(userId);
       
-      // Start chat with history
-      const chat = this.model.startChat({
-        history,
-      });
+      const chat = this.model.startChat({ history });
 
-      // Send user message
       this.logger.log(`[${requestId}] 💬 Sending to Gemini: "${userMessage}"`);
       let result = await chat.sendMessage(userMessage);
       let response = result.response;
 
-      // Handle function calls (tool execution loop)
       let functionCallCount = 0;
       const MAX_FUNCTION_CALLS = 5;
 
@@ -208,7 +147,7 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
                   response: toolResult,
                 },
               };
-            } catch (error) {
+            } catch (error: any) {
               this.logger.error(`[${requestId}] ❌ Tool ${call.name} failed: ${error.message}`);
               
               return {
@@ -223,7 +162,6 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
           })
         );
 
-        // Send function results back to Gemini
         result = await chat.sendMessage(functionResponses);
         response = result.response;
       }
@@ -236,36 +174,17 @@ export class GeminiAgentService implements IAgentService, OnModuleInit {
         this.logger.warn(`[${requestId}] ⚠️  No tools called but message suggests action needed: "${userMessage}"`);
       }
 
-      // Get final text response
       const finalResponse = response.text();
       this.logger.log(`[${requestId}] 📤 Gemini response: "${finalResponse.substring(0, 100)}${finalResponse.length > 100 ? '...' : ''}"`);
 
-      // Save to history
-      this.addToHistory(userId, 'user', userMessage);
-      this.addToHistory(userId, 'model', finalResponse);
+      this.addGeminiMessage(userId, 'user', userMessage);
+      this.addGeminiMessage(userId, 'model', finalResponse);
 
       return finalResponse;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`[${requestId}] ❌ Error processing with Gemini:`, error);
       throw new Error(`Failed to process message with Gemini: ${error.message}`);
     }
-  }
-
-  clearHistory(userId: string) {
-    this.conversationHistory.delete(userId);
-    this.logger.log(`🗑️  Cleared conversation history for user: ${userId}`);
-  }
-
-  getHistoryStats(): { totalUsers: number; totalMessages: number } {
-    let totalMessages = 0;
-    for (const history of this.conversationHistory.values()) {
-      totalMessages += history.messages.length;
-    }
-
-    return {
-      totalUsers: this.conversationHistory.size,
-      totalMessages,
-    };
   }
 }

@@ -108,7 +108,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
       const geminiTools = this.convertMCPToolsToGemini(mcpTools);
 
       this.model = this.genAI.getGenerativeModel({
-        model: 'gemingemini-2.5-flashi-2.0-flash-exp',
+        model: 'gemini-2.0-flash-exp',
         tools: geminiTools,
         systemInstruction: SYSTEM_PROMPT,
       });

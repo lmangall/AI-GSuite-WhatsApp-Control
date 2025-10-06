@@ -125,7 +125,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
         
         return new ChatGoogleGenerativeAI({
           apiKey,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-2.0-flash-exp',
           temperature: 0.7,
           maxOutputTokens: this.config.maxTokens,
         });

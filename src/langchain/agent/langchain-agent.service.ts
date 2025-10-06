@@ -337,9 +337,9 @@ CRITICAL FORMAT RULES:
         return fastResponse;
       }
 
-      // Fast-path for email requests - use dedicated email handler
+      // Fast-path for reading emails - use dedicated email handler
       if (this.isEmailRequest(userMessage)) {
-        this.logger.log(`📧 [${requestId}] Email request detected, using dedicated handler`);
+        this.logger.log(`📧 [${requestId}] Email read request detected, using dedicated handler`);
         const emailResponse = await this.handleEmailRequest(userMessage, userId, requestId);
         
         const duration = Date.now() - startTime;
@@ -358,6 +358,29 @@ CRITICAL FORMAT RULES:
         });
 
         return emailResponse;
+      }
+
+      // Fast-path for sending emails - bypass agent complexity
+      if (this.isSendEmailRequest(userMessage)) {
+        this.logger.log(`📧 [${requestId}] Send email request detected, using direct handler`);
+        const sendResponse = await this.handleSendEmailDirect(userMessage, userId, requestId);
+        
+        const duration = Date.now() - startTime;
+        this.logger.log(`⚡ [${requestId}] Send email completed in ${duration}ms`);
+
+        // Add to history
+        this.addToHistory(userId, {
+          role: 'user',
+          content: userMessage,
+          timestamp: new Date(),
+        });
+        this.addToHistory(userId, {
+          role: 'assistant',
+          content: sendResponse,
+          timestamp: new Date(),
+        });
+
+        return sendResponse;
       }
 
       // DISABLED: Optimized email processing - needs proper implementation with batch content fetching
@@ -926,7 +949,60 @@ CRITICAL FORMAT RULES:
   }
 
   /**
-   * Check if message is an email request
+   * Check if message is a send email request
+   */
+  private isSendEmailRequest(message: string): boolean {
+    const normalized = message.toLowerCase().trim();
+    const sendPatterns = [
+      /send.*email/i,
+      /send.*test.*email/i,
+      /email.*to/i,
+      /compose.*email/i,
+      /write.*email/i,
+    ];
+
+    return sendPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  /**
+   * Handle send email request directly
+   */
+  private async handleSendEmailDirect(message: string, userId: string, requestId: string): Promise<string> {
+    try {
+      this.logger.log(`📧 [${requestId}] Sending test email directly`);
+
+      // For test emails, use simple defaults
+      const tools = await this.getAvailableTools();
+      const sendTool = tools.find(tool => (tool as any).name === 'send_gmail_message');
+
+      if (!sendTool) {
+        return "Sorry, email sending is not available right now.";
+      }
+
+      // Extract email address if provided
+      const emailMatch = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      const toEmail = emailMatch ? emailMatch[1] : 'l.mangallon@gmail.com';
+
+      // Send test email
+      const result = await sendTool.invoke(JSON.stringify({
+        to: toEmail,
+        subject: "Test Email from Jarvis",
+        body: "This is a test email sent from your AI assistant!",
+        user_google_email: 'l.mangallon@gmail.com',
+      }));
+
+      this.logger.log(`✅ [${requestId}] Email sent successfully`);
+
+      return `Test email sent to ${toEmail}! 📧`;
+
+    } catch (error) {
+      this.logger.error(`❌ [${requestId}] Send email failed:`, error);
+      return `Sorry, I couldn't send the email. ${error.message}`;
+    }
+  }
+
+  /**
+   * Check if message is an email read request
    */
   private isEmailRequest(message: string): boolean {
     const normalized = message.toLowerCase().trim();

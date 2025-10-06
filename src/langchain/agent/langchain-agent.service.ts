@@ -869,6 +869,9 @@ CRITICAL:
       /last.*\d+.*email/i,  // "last 5 emails", "last 10 emails"
       /give.*email/i,       // "give me emails", "give last emails"
       /show.*last.*email/i, // "show last emails"
+      /pull.*email/i,       // "pull my emails", "pull last emails"
+      /fetch.*email/i,      // "fetch emails"
+      /list.*email/i,       // "list emails"
     ];
 
     return emailPatterns.some(pattern => pattern.test(normalized));
@@ -884,10 +887,13 @@ CRITICAL:
 
       // Extract number of emails requested (default to 10)
       let maxResults = 10;
-      const numberMatch = normalized.match(/last\s+(\d+)|(\d+)\s+email/);
+      const numberMatch = normalized.match(/last\s+(\d+)|(\d+)\s+email|(\d+)\s+last/);
       if (numberMatch) {
-        maxResults = parseInt(numberMatch[1] || numberMatch[2], 10);
+        maxResults = parseInt(numberMatch[1] || numberMatch[2] || numberMatch[3], 10);
         maxResults = Math.min(maxResults, 25); // Cap at 25
+      } else if (normalized.includes('last') && !normalized.match(/\d+/)) {
+        // "last emails" without number defaults to 5
+        maxResults = 5;
       }
 
       this.logger.log(`📧 [${requestId}] Fetching ${unreadOnly ? 'unread' : 'last'} ${maxResults} emails`);

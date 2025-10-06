@@ -26,6 +26,7 @@ export class LangChainRouterService {
       if (fastRoute.shouldUseFastPath && fastRoute.response) {
         const duration = Date.now() - startTime;
         this.logger.log(`⚡ [${requestId}] Fast-path response completed in ${duration}ms (intent: ${fastRoute.intent})`);
+        this.logger.debug(`⚡ [${requestId}] Fast-path response (${fastRoute.response.length} chars): "${fastRoute.response.substring(0, 100)}..."`);
         return fastRoute.response;
       }
       

@@ -90,7 +90,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
 
       // Get current date/time info for context
       const now = new Date();
-      const currentDateTime = now.toLocaleString('en-US', { 
+      const currentDateTime = now.toLocaleString('en-US', {
         timeZone: 'Europe/Paris',
         weekday: 'long',
         year: 'numeric',
@@ -101,7 +101,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
         hour12: false
       });
       const isoDateTime = now.toISOString();
-      
+
       // Create a simplified ReAct prompt optimized for speed and reliability
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are Jarvis, Leo's personal AI assistant. Be casual, helpful, and conversational.
@@ -180,16 +180,16 @@ CRITICAL FORMAT RULES:
         handleParsingErrors: (error: Error) => {
           // Custom parsing error handler - extract useful content from malformed responses
           this.logger.warn(`⚠️ Parsing error occurred: ${error.message.substring(0, 200)}`);
-          
+
           const errorMessage = error.message;
-          
+
           // PRIORITY: Check if there's a valid Action that should be executed
           // This happens when LLM provides both action and final answer
           const actionMatch = errorMessage.match(/Action:\s*(\w+)\s*\nAction Input:\s*(\{[\s\S]*?\})/i);
           if (actionMatch && actionMatch[1] && actionMatch[2]) {
             const actionName = actionMatch[1].trim();
             const actionInput = actionMatch[2].trim();
-            
+
             // Verify it's a valid tool
             const validTools = tools.map(t => t.name);
             if (validTools.includes(actionName)) {
@@ -198,27 +198,27 @@ CRITICAL FORMAT RULES:
               return `Thought: I need to execute the action\nAction: ${actionName}\nAction Input: ${actionInput}`;
             }
           }
-          
+
           // Extract the actual LLM output (before "Troubleshooting URL")
           const outputMatch = errorMessage.match(/Could not parse LLM output:\s*(.+?)(?:\n\nTroubleshooting|$)/is);
           if (outputMatch && outputMatch[1]) {
             const llmOutput = outputMatch[1].trim();
-            
+
             // Check if it's a simple conversational response (greeting, question, short answer)
             const isSimpleResponse = (
-              llmOutput.length < 500 && 
+              llmOutput.length < 500 &&
               llmOutput.match(/[.!?]$/) &&
               !llmOutput.includes('Action:') &&
               !llmOutput.includes('Thought:')
             );
-            
+
             if (isSimpleResponse) {
               this.logger.log(`✅ Detected simple conversational response, returning directly`);
               // Return with proper ReAct format to signal completion
               return `Thought: I have the answer\nFinal Answer: ${llmOutput}`;
             }
           }
-          
+
           // Try to extract Final Answer if it exists in the error (but only if no action was found)
           const finalAnswerMatch = errorMessage.match(/Final Answer:\s*(.+?)(?:\n\n|Troubleshooting|$)/is);
           if (finalAnswerMatch && finalAnswerMatch[1]) {
@@ -229,7 +229,7 @@ CRITICAL FORMAT RULES:
               return `Thought: I have the answer\nFinal Answer: ${answer}`;
             }
           }
-          
+
           // Check if the error contains actual content we can use
           if (errorMessage.includes('Here are your') || errorMessage.includes('📧')) {
             const contentMatch = errorMessage.match(/Here are your[^:]*:([\s\S]*?)(?:Let me know|Troubleshooting|$)/i);
@@ -239,18 +239,18 @@ CRITICAL FORMAT RULES:
               return `Thought: I have the results\nFinal Answer: ${extractedContent}`;
             }
           }
-          
+
           // For specific actions, provide targeted guidance
           if (errorMessage.includes('send_gmail_message') || errorMessage.includes('email')) {
             this.logger.log(`📧 Email action detected in parsing error`);
             return `Invalid format. Use:\nThought: I need to send an email\nAction: send_gmail_message\nAction Input: {parameters}`;
           }
-          
+
           if (errorMessage.includes('create_event') || errorMessage.includes('calendar')) {
             this.logger.log(`🗓️ Calendar action detected in parsing error`);
             return `Invalid format. Use:\nThought: I need to create a calendar event\nAction: create_event\nAction Input: {parameters}`;
           }
-          
+
           // Default: simple retry instruction
           return `Invalid format. Respond with ONLY:\nFinal Answer: [your response]`;
         },
@@ -333,7 +333,7 @@ CRITICAL FORMAT RULES:
       if (this.isSimpleConversationalQuestion(userMessage)) {
         this.logger.log(`💬 [${requestId}] Simple conversational question detected, answering directly`);
         const conversationalResponse = await this.handleConversationalQuestion(userMessage, userId, requestId);
-        
+
         const duration = Date.now() - startTime;
         this.logger.log(`⚡ [${requestId}] Conversational response completed in ${duration}ms`);
 
@@ -377,7 +377,7 @@ CRITICAL FORMAT RULES:
       if (this.isEmailRequest(userMessage)) {
         this.logger.log(`📧 [${requestId}] Email read request detected, using dedicated handler`);
         const emailResponse = await this.handleEmailRequest(userMessage, userId, requestId);
-        
+
         const duration = Date.now() - startTime;
         this.logger.log(`⚡ [${requestId}] Email request completed in ${duration}ms`);
 
@@ -400,7 +400,7 @@ CRITICAL FORMAT RULES:
       if (this.isSendEmailRequest(userMessage)) {
         this.logger.log(`📧 [${requestId}] Send email request detected, using direct handler`);
         const sendResponse = await this.handleSendEmailDirect(userMessage, userId, requestId);
-        
+
         const duration = Date.now() - startTime;
         this.logger.log(`⚡ [${requestId}] Send email completed in ${duration}ms`);
 
@@ -1022,14 +1022,14 @@ CRITICAL FORMAT RULES:
       // Build context from history
       let contextStr = '';
       if (recentHistory.length > 0) {
-        contextStr = '\n\nRecent conversation:\n' + recentHistory.map(msg => 
+        contextStr = '\n\nRecent conversation:\n' + recentHistory.map(msg =>
           `${msg.role === 'user' ? 'Leo' : 'You'}: ${msg.content}`
         ).join('\n');
       }
 
       // Use the primary model directly without agent framework
       const model = this.getPrimaryModel();
-      
+
       const prompt = `You are Jarvis, Leo's casual AI assistant. Answer this question naturally and conversationally.${contextStr}
 
 Leo: ${message}
@@ -1163,17 +1163,17 @@ You:`;
 
       // Format and return emails
       if (result.emails.length === 0) {
-        return unreadOnly 
+        return unreadOnly
           ? "No unread emails! 📭 You're all caught up! 🎉"
           : "No emails found! 📭";
       }
 
       const formatted = this.emailHandler.formatEmailsForDisplay(result.emails);
-      
+
       // Format with count and helpful suffix
       const emailType = unreadOnly ? 'unread' : 'recent';
       const header = `Here you go, ${emailType} squad (${result.emails.length}):\n`;
-      const footer = result.emails.length > 0 
+      const footer = result.emails.length > 0
         ? '\n\nWant me to pull full content for any of these? Just tell me the number.'
         : '';
 

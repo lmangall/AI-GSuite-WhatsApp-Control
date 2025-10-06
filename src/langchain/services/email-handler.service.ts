@@ -85,7 +85,7 @@ export class EmailHandlerService {
     }
 
     const formatted = emails.map((email, index) => {
-      return `📧 ${email.subject} - from ${email.sender}`;
+      return `${email.subject} - from ${email.sender}`;
     });
 
     return formatted.join('\n');

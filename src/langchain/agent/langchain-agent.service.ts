@@ -867,6 +867,9 @@ CRITICAL:
       /check.*unread/i,
       /unread.*email/i,
       /email.*unread/i,
+      /last.*\d+.*email/i,  // "last 5 emails", "last 10 emails"
+      /give.*email/i,       // "give me emails", "give last emails"
+      /show.*last.*email/i, // "show last emails"
     ];
 
     return emailPatterns.some(pattern => pattern.test(normalized));
@@ -880,11 +883,19 @@ CRITICAL:
       const normalized = message.toLowerCase();
       const unreadOnly = normalized.includes('unread');
 
-      this.logger.log(`📧 [${requestId}] Fetching ${unreadOnly ? 'unread' : 'recent'} emails`);
+      // Extract number of emails requested (default to 10)
+      let maxResults = 10;
+      const numberMatch = normalized.match(/last\s+(\d+)|(\d+)\s+email/);
+      if (numberMatch) {
+        maxResults = parseInt(numberMatch[1] || numberMatch[2], 10);
+        maxResults = Math.min(maxResults, 25); // Cap at 25
+      }
+
+      this.logger.log(`📧 [${requestId}] Fetching ${unreadOnly ? 'unread' : 'last'} ${maxResults} emails`);
 
       const result = await this.emailHandler.getRecentEmails({
         unreadOnly,
-        maxResults: 10,
+        maxResults,
         userEmail: 'l.mangallon@gmail.com',
       });
 
@@ -901,9 +912,11 @@ CRITICAL:
       }
 
       const formatted = this.emailHandler.formatEmailsForDisplay(result.emails);
+      
+      // Simple prefix without redundant count
       const prefix = unreadOnly 
-        ? `You have ${result.emails.length} unread email${result.emails.length !== 1 ? 's' : ''}:\n\n`
-        : `Here are your recent emails (${result.emails.length}):\n\n`;
+        ? `Unread emails:\n\n`
+        : `Recent emails:\n\n`;
 
       return prefix + formatted;
 

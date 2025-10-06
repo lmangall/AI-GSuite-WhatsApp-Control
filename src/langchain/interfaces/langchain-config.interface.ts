@@ -39,14 +39,14 @@ export interface ConversationMessage {
 }
 
 export interface IntentDetectionResult {
-  intent: 'web_search' | 'mcp_tools' | 'general_chat';
+  intent: 'web_search' | 'mcp_tools' | 'general_chat' | 'greeting';
   confidence: number;
   suggestedTools?: string[];
   searchQuery?: string;
 }
 
 export interface IntentPattern {
-  intent: 'web_search' | 'mcp_tools' | 'general_chat';
+  intent: 'web_search' | 'mcp_tools' | 'general_chat' | 'greeting';
   keywords: string[];
   patterns: RegExp[];
   priority: number;

@@ -364,6 +364,14 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
   private initializePromptStrategies(): void {
     const strategies: PromptStrategy[] = [
       {
+        name: 'greeting',
+        intent: 'greeting',
+        systemPrompt: 'You\'re Jarvis greeting Leo. Be casual and mention your capabilities briefly.',
+        userPromptTemplate: 'Leo greeted you: {userMessage}. Respond with a friendly greeting and show what you can do.',
+        contextInstructions: 'Greet casually and mention: Google Workspace, Web Research, General Knowledge.',
+        outputFormat: 'Casual greeting + brief capabilities list with emojis.'
+      },
+      {
         name: 'web_search',
         intent: 'web_search',
         systemPrompt: 'You\'re Jarvis, Leo\'s AI assistant with web search powers. Stay casual and search immediately when needed.',
@@ -723,18 +731,27 @@ Be honest about what you cannot do without the tools, but still try to be helpfu
   }
 
   /**
-   * Get Jarvis greeting prompt
+   * Get Jarvis greeting prompt with capabilities
    */
   getJarvisGreeting(): PromptTemplate {
     return new PromptTemplate({
-      template: `You're Jarvis, Leo's personal AI assistant. Respond with a casual greeting that shows you're ready to help.
+      template: `You're Jarvis, Leo's personal AI assistant. Respond with a casual greeting and briefly mention what you can help with.
+
+Format:
+[Casual Greeting] 
+I can help you with:
+• 📧 Google Workspace (Gmail, Calendar, Docs, Sheets, Drive)
+• 🔍 Web Research (current info, news, weather, anything online)
+• 💬 General Knowledge (questions, explanations, casual chat)
+
+Just tell me what you need!
 
 Examples:
-- "Jarvis, at your service! What's up?"
-- "Hey Leo! What can I help you with today?"
-- "Yo! Jarvis here, ready to tackle whatever you need."
+- "Jarvis, at your service! 👋"
+- "Hey Leo! What's up? 🤖"
+- "Yo! Jarvis here, ready to help! 💪"
 
-Keep it short, friendly, and natural.`,
+Keep it friendly and show your capabilities.`,
       inputVariables: []
     });
   }
@@ -808,6 +825,33 @@ FAST EXECUTION - NO OVERTHINKING!`
 SPEED IS KEY - ACT FAST!`
       ),
       HumanMessagePromptTemplate.fromTemplate('{userMessage}')
+    ]);
+  }
+
+  /**
+   * Create greeting prompt with capabilities showcase
+   */
+  createGreetingPrompt(): ChatPromptTemplate {
+    return ChatPromptTemplate.fromMessages([
+      SystemMessagePromptTemplate.fromTemplate(
+        `You're Jarvis, Leo's AI assistant. He just greeted you. Respond with:
+
+1. Casual greeting (pick one):
+   - "Jarvis, at your service! 👋"
+   - "Hey Leo! What's up? 🤖"  
+   - "Yo! Jarvis here, ready to help! 💪"
+
+2. Brief capabilities:
+   I can help you with:
+   • 📧 **Google Workspace** - Gmail, Calendar, Docs, Sheets, Drive
+   • 🔍 **Web Research** - Current info, news, weather, anything online
+   • 💬 **General Knowledge** - Questions, explanations, casual chat
+   
+   Just tell me what you need!
+
+Keep it friendly and informative but not overwhelming.`
+      ),
+      HumanMessagePromptTemplate.fromTemplate('Leo said: {userMessage}')
     ]);
   }
 

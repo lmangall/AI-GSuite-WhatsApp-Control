@@ -17,6 +17,7 @@ import { StartupValidationService } from './startup/startup-validation.service';
 import { GoogleWorkspaceModule } from '../mcp/google-workspace.module';
 import { BraveModule } from '../webSearch/brave.module';
 import { ResultFormatterService } from './formatters/result-formatter.service';
+import { GreetingResponseService } from './responses/greeting-response.service';
 
 @Module({
     imports: [ConfigModule, GoogleWorkspaceModule, BraveModule],
@@ -36,6 +37,7 @@ import { ResultFormatterService } from './formatters/result-formatter.service';
         StructuredLoggerService,
         StartupValidationService,
         ResultFormatterService,
+        GreetingResponseService,
     ],
     exports: [
         LangChainConfigService,

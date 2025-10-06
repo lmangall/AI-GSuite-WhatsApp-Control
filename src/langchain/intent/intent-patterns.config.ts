@@ -4,6 +4,24 @@ import { IntentPattern } from '../interfaces/langchain-config.interface';
  * Default intent patterns configuration
  */
 export const DEFAULT_INTENT_PATTERNS: IntentPattern[] = [
+  // Greeting Intent Patterns (Highest Priority - Fast Response)
+  {
+    intent: 'greeting',
+    priority: 4,
+    keywords: [
+      'hi', 'hello', 'hey', 'halo', 'hola', 'bonjour', 'salut',
+      'good morning', 'good afternoon', 'good evening', 'good night',
+      'howdy', 'greetings', 'sup', 'what\'s up', 'whats up',
+      'yo', 'wassup', 'how are you', 'how\'s it going'
+    ],
+    patterns: [
+      /^(hi|hello|hey|halo|hola|yo|sup|wassup)!?$/i,
+      /^(good\s+(morning|afternoon|evening|night))!?$/i,
+      /^(how\s+(are\s+you|\'s\s+it\s+going))[\?\!]?$/i,
+      /^(what\'?s\s+up)[\?\!]?$/i
+    ]
+  },
+
   // Web Search Intent Patterns (High Priority)
   {
     intent: 'web_search',
@@ -182,7 +200,8 @@ export const INTENT_TOOL_MAPPING = {
     files: ['drive', 'dropbox', 'onedrive'],
     general: ['mcp_general']
   },
-  general_chat: []
+  general_chat: [],
+  greeting: [] // No tools needed for greetings - direct response
 };
 
 /**

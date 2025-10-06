@@ -40,8 +40,8 @@ export class IntentConfigService {
   /**
    * Gets the default intent when confidence is below threshold
    */
-  getDefaultIntent(): 'web_search' | 'mcp_tools' | 'general_chat' {
-    return this.configService.get<'web_search' | 'mcp_tools' | 'general_chat'>(
+  getDefaultIntent(): 'web_search' | 'mcp_tools' | 'general_chat' | 'greeting' {
+    return this.configService.get<'web_search' | 'mcp_tools' | 'general_chat' | 'greeting'>(
       'LANGCHAIN_DEFAULT_INTENT',
       'general_chat'
     );
@@ -50,7 +50,7 @@ export class IntentConfigService {
   /**
    * Gets tool suggestions for a specific intent
    */
-  getToolsForIntent(intent: 'web_search' | 'mcp_tools' | 'general_chat', subCategory?: string): string[] {
+  getToolsForIntent(intent: 'web_search' | 'mcp_tools' | 'general_chat' | 'greeting', subCategory?: string): string[] {
     if (intent === 'web_search') {
       return INTENT_TOOL_MAPPING.web_search;
     }
@@ -60,6 +60,10 @@ export class IntentConfigService {
         return INTENT_TOOL_MAPPING.mcp_tools[subCategory];
       }
       return INTENT_TOOL_MAPPING.mcp_tools.general;
+    }
+
+    if (intent === 'greeting') {
+      return INTENT_TOOL_MAPPING.greeting;
     }
 
     return INTENT_TOOL_MAPPING.general_chat;

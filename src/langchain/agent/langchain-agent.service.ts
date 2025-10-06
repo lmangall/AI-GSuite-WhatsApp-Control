@@ -94,7 +94,8 @@ CRITICAL RULES:
 3. Be FAST - execute tools immediately when needed
 4. Keep responses SHORT and casual
 
-Available tools: {tool_names}
+Available tools: {tools}
+Tool names: {tool_names}
 
 REACT FORMAT (follow exactly):
 Thought: [what you need to do]
@@ -685,7 +686,12 @@ If no tools needed, skip to Final Answer directly.`],
       /^my.*email/i,
       /^email/i,
       /^unread/i,
-      /^inbox/i
+      /^inbox/i,
+      /check.*unread.*email/i,
+      /unread.*email/i,
+      /email.*unread/i,
+      /check.*enail/i, // Handle typos
+      /unread.*enail/i
     ];
     
     return emailPatterns.some(pattern => pattern.test(normalizedMessage));
@@ -719,7 +725,7 @@ If no tools needed, skip to Final Answer directly.`],
       // Execute search with timeout
       this.logger.log(`🔍 [${requestId}] Searching emails: ${query}`);
       const searchPromise = (searchTool as any).invoke({
-        query,
+        query: query,
         user_google_email: 'l.mangallon@gmail.com',
         page_size: pageSize
       });
@@ -1073,7 +1079,7 @@ If no tools needed, skip to Final Answer directly.`],
       // Call the search tool directly
       this.logger.log(`🔍 [${requestId}] Searching emails with query: ${query}`);
       const searchResult = await (searchTool as any).invoke({
-        query,
+        query: query,
         user_google_email: 'l.mangallon@gmail.com',
         page_size: 10
       });

@@ -123,7 +123,12 @@ export class FastIntentRouterService {
       /^my.*email/i,
       /^email/i,
       /^unread/i,
-      /^inbox/i
+      /^inbox/i,
+      /check.*unread.*email/i,
+      /unread.*email/i,
+      /email.*unread/i,
+      /check.*enail/i, // Handle typos
+      /unread.*enail/i
     ];
     
     if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {

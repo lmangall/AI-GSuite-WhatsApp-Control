@@ -4,6 +4,7 @@ import { Tool as MCPTool } from '@modelcontextprotocol/sdk/types.js';
 import { GoogleWorkspaceMCPService } from '../../mcp/google-workspace-mcp.service';
 import { BraveService } from '../../webSearch/brave.service';
 import { LangChainConfigService } from '../config/langchain-config.service';
+import { ResultFormatterService } from '../formatters/result-formatter.service';
 import { 
   ILangChainToolManager, 
   LangChainTool, 
@@ -22,7 +23,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
   constructor(
     private readonly googleWorkspaceService: GoogleWorkspaceMCPService,
     private readonly braveService: BraveService,
-    private readonly configService: LangChainConfigService
+    private readonly configService: LangChainConfigService,
+    private readonly resultFormatter: ResultFormatterService
   ) {}
 
   /**
@@ -290,14 +292,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
             
             const result = await this.googleWorkspaceService.callTool(mcpTool.name!, parsedArgs);
             
-            // Format result as string for LangChain
-            if (typeof result === 'string') {
-              return result;
-            } else if (result && typeof result === 'object') {
-              return JSON.stringify(result, null, 2);
-            } else {
-              return String(result || 'Tool executed successfully');
-            }
+            // Format result using the result formatter for human-friendly display
+            return this.resultFormatter.formatToolResult(mcpTool.name!, result);
           } catch (error) {
             this.logger.error(`Error executing MCP tool ${mcpTool.name}:`, error);
             throw new Error(`MCP tool execution failed: ${error.message}`);

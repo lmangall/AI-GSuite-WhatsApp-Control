@@ -2,10 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PromptTemplate, ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { LangChainConfigService } from '../config/langchain-config.service';
 import { MessageContext } from '../interfaces/langchain-config.interface';
-import { 
-  ILangChainPromptManager, 
-  PromptTemplateConfig, 
-  PromptStrategy, 
+import {
+  ILangChainPromptManager,
+  PromptTemplateConfig,
+  PromptStrategy,
   PromptContext,
   PromptValidationResult
 } from './prompt-manager.interface';
@@ -82,7 +82,12 @@ Good ✅: "Gotcha, using l.mangallon@gmail.com"
 Current time: {currentTime}
 Available tools: {availableTools}
 
-CRITICAL: When displaying emails, ONLY show subject and sender name. NO IDs, NO LINKS, NO TECHNICAL INFO!`,
+CRITICAL: When displaying emails, ONLY show subject and sender name. NO IDs, NO LINKS, NO TECHNICAL INFO!
+
+🤖 CONTEXT UNDERSTANDING:
+- If Leo says just "unread" after asking about emails, he wants unread emails
+- If Leo says "yes", "yep", "do it" after you suggest an action, DO IT IMMEDIATELY
+- Don't ask for clarification on obvious context`,
       inputVariables: ['currentTime', 'availableTools']
     });
 
@@ -159,7 +164,7 @@ Keep responses short and natural - like texting a friend. When Leo says "yes" or
    */
   selectPromptStrategy(messageContext: MessageContext): ChatPromptTemplate {
     const intent = messageContext.detectedIntent?.intent || 'general_chat';
-    
+
     switch (intent) {
       case 'web_search':
         return this.getWebSearchPrompt();
@@ -176,11 +181,11 @@ Keep responses short and natural - like texting a friend. When Leo says "yes" or
    */
   async buildContextualPrompt(messageContext: MessageContext): Promise<ChatPromptTemplate> {
     const basePrompt = this.selectPromptStrategy(messageContext);
-    
+
     // Add conversation history if available
     if (messageContext.conversationHistory && messageContext.conversationHistory.length > 0) {
       const historyContext = this.formatConversationHistory(messageContext.conversationHistory);
-      
+
       return ChatPromptTemplate.fromMessages([
         SystemMessagePromptTemplate.fromTemplate(
           `You are a helpful AI assistant integrated with WhatsApp.
@@ -242,7 +247,7 @@ Be concise, helpful, and maintain context from the conversation history.`
   async loadPromptsFromConfig(): Promise<void> {
     try {
       const config = this.configService.getLangChainConfig();
-      
+
       // Load system prompt if path is provided
       if (config.systemPromptPath) {
         await this.loadSystemPromptFromFile(config.systemPromptPath);
@@ -344,10 +349,10 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
     // Initialize default prompts
     this.getSystemPrompt();
     this.getChatPrompt();
-    
+
     // Initialize prompt strategies
     this.initializePromptStrategies();
-    
+
     this.logger.debug('Default prompts initialized');
   }
 
@@ -403,7 +408,7 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
   private extractVariables(template: string): string[] {
     const matches = template.match(/\{([^}]+)\}/g);
     if (!matches) return [];
-    
+
     return matches.map(match => match.slice(1, -1));
   }
 
@@ -430,7 +435,7 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
     // Check for common variables
     const variables = this.extractVariables(template);
     const commonVariables = ['userMessage', 'currentTime', 'availableTools'];
-    
+
     commonVariables.forEach(variable => {
       if (template.includes(variable) && !variables.includes(variable)) {
         warnings.push(`Consider adding {${variable}} as a variable`);
@@ -455,7 +460,7 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
         template: content,
         inputVariables: this.extractVariables(content)
       });
-      
+
       this.promptTemplates.set('system', template);
       this.logger.debug(`Loaded system prompt from: ${filePath}`);
     } catch (error) {
@@ -469,18 +474,18 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
   private async loadPromptTemplatesFromDirectory(dirPath: string): Promise<void> {
     try {
       const files = await fs.readdir(dirPath);
-      
+
       for (const file of files) {
         if (file.endsWith('.txt') || file.endsWith('.md')) {
           const filePath = path.join(dirPath, file);
           const content = await fs.readFile(filePath, 'utf-8');
           const name = path.basename(file, path.extname(file));
-          
+
           const template = new PromptTemplate({
             template: content,
             inputVariables: this.extractVariables(content)
           });
-          
+
           this.promptTemplates.set(name, template);
           this.logger.debug(`Loaded prompt template: ${name}`);
         }
@@ -513,14 +518,14 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
   ): Promise<ChatPromptTemplate> {
     const intent = messageContext.detectedIntent?.intent || 'general_chat';
     const strategy = this.promptStrategies.get(intent);
-    
+
     if (!strategy) {
       return this.getChatPrompt();
     }
 
     // Build system message with context
     let systemMessage = strategy.systemPrompt;
-    
+
     // Add user preferences if available
     if (userPreferences) {
       systemMessage += `\n\nUser preferences: ${JSON.stringify(userPreferences, null, 2)}`;
@@ -557,14 +562,14 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
           format: 'whatsapp',
           instructions: 'Keep it casual: "Found this for you..." with emojis and clean formatting. Mobile-friendly.'
         };
-      
+
       case 'mcp_tools':
         return {
           shouldStructure: true,
           format: 'whatsapp',
           instructions: 'CRITICAL EMAIL FORMAT: "📧 [Subject] - from [Sender Name]" ONLY. NO email IDs, NO links, NO technical details. Be human, not robotic. Confirm actions with "Sent! ✅".'
         };
-      
+
       case 'general_chat':
       default:
         return {
@@ -584,7 +589,7 @@ Short responses when possible. Think tech-savvy friend, not corporate assistant.
   ): Promise<ChatPromptTemplate> {
     const toolDescriptions = this.generateToolDescriptions(availableTools);
     const intent = messageContext.detectedIntent?.intent || 'general_chat';
-    
+
     let systemPrompt = `You are a helpful AI assistant with access to the following tools:
 
 ${toolDescriptions}
@@ -621,7 +626,7 @@ Choose the most appropriate tool(s) based on the user's request. If no tools are
     memoryContext: string
   ): Promise<ChatPromptTemplate> {
     const basePrompt = await this.buildContextualPrompt(messageContext);
-    
+
     // Enhance with memory context
     const enhancedSystemPrompt = `You're Jarvis, Leo's AI assistant with memory of past conversations.
 
@@ -705,7 +710,7 @@ Be honest about what you cannot do without the tools, but still try to be helpfu
     isComplete: boolean;
     missingVariables: string[];
   } {
-    const missingVariables = requiredVariables.filter(variable => 
+    const missingVariables = requiredVariables.filter(variable =>
       !(variable in context) || context[variable] === undefined || context[variable] === null
     );
 

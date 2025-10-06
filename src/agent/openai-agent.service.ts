@@ -37,7 +37,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
       'weather', 'stock', 'price', 'what happened', 'update on',
       'search for', 'look up', 'find information', 'google'
     ];
-    
+
     const lowerMessage = message.toLowerCase();
     return webSearchKeywords.some(keyword => lowerMessage.includes(keyword));
   }
@@ -58,18 +58,18 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
     if (this.needsWebSearch(userMessage)) {
       return this.processWithWebSearch(userId, userMessage, requestId);
     }
-    
+
     return this.processWithChatCompletion(userId, userMessage, requestId);
   }
 
   private async processWithWebSearch(userId: string, userMessage: string, requestId: string): Promise<string> {
     try {
       this.logger.log(`[${requestId}] 🌐 Processing with web search for user: ${userId}`);
-      
+
       // For now, fall back to regular chat completion since web_search tool is not available
       // In a real implementation, you would integrate with a web search service
       this.logger.warn(`[${requestId}] ⚠️ Web search requested but not available, using regular chat`);
-      
+
       return this.processWithChatCompletion(userId, userMessage, requestId);
     } catch (error: any) {
       this.logger.error(`[${requestId}] ❌ Error with web search, falling back to chat: ${error.message}`);
@@ -97,13 +97,13 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
       this.logger.log(`[${requestId}] 💬 Sending to OpenAI: "${userMessage}"`);
 
       let response = await this.client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-5-nano',
         messages: messages,
         tools: openAITools,
       });
 
       let assistantMessage = response.choices[0].message;
-      
+
       let functionCallCount = 0;
       const MAX_FUNCTION_CALLS = 5;
 
@@ -121,10 +121,10 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
             try {
               const args = JSON.parse(toolCall.function.arguments);
               const toolResult = await this.mcpService.callTool(toolCall.function.name, args);
-              
+
               this.logger.log(`[${requestId}] ✅ Tool ${toolCall.function.name} executed successfully`);
               this.logger.log(`[${requestId}] 📊 Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);
-              
+
               return {
                 tool_call_id: toolCall.id,
                 role: 'tool' as const,
@@ -132,7 +132,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
               };
             } catch (error: any) {
               this.logger.error(`[${requestId}] ❌ Tool ${toolCall.function.name} failed: ${error.message}`);
-              
+
               return {
                 tool_call_id: toolCall.id,
                 role: 'tool' as const,
@@ -145,7 +145,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
         messages.push(...toolResults);
 
         response = await this.client.chat.completions.create({
-          model: 'gpt-4-turbo-preview',
+          model: 'gpt-5-nano',
           messages: messages,
           tools: openAITools,
         });

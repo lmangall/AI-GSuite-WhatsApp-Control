@@ -103,12 +103,10 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       const conversationContext = await this.contextService.getFormattedContext(messageContext.userId);
 
       // Prepare input for agent
+      // Note: agent_scratchpad is managed internally by the React agent
       const agentInput = {
         input: messageContext.messageText,
-        chat_history: conversationContext,
-        agent_scratchpad: [], // Initialize empty scratchpad for new conversation
-        current_time: new Date().toISOString(),
-        available_tools: this.toolManager.getToolNames().join(', ')
+        chat_history: conversationContext
       };
 
       // Execute agent with timeout
@@ -263,7 +261,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       } else {
         this.primaryModel = new ChatOpenAI({
           apiKey: this.configService.getOpenAIApiKey(),
-          modelName: 'gpt-3.5-turbo',
+          modelName: 'gpt-5-nano',
           temperature: 0.7,
           maxTokens: config.maxTokens
         });
@@ -273,7 +271,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       if (config.fallbackModel === 'openai') {
         this.fallbackModel = new ChatOpenAI({
           apiKey: this.configService.getOpenAIApiKey(),
-          modelName: 'gpt-3.5-turbo',
+          modelName: 'gpt-5-nano',
           temperature: 0.7,
           maxTokens: config.maxTokens
         });

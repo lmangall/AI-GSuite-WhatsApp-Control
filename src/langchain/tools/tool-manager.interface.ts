@@ -7,6 +7,7 @@ export interface ILangChainToolManager {
   discoverMCPTools(): Promise<LangChainTool[]>;
   createBraveSearchTool(): LangChainTool;
   getAllTools(): Promise<LangChainTool[]>;
+  getMinimalTools(): Promise<LangChainTool[]>;
   
   // Tool execution
   executeTool(toolName: string, args: any): Promise<ToolExecutionResult>;

@@ -18,6 +18,8 @@ import { GoogleWorkspaceModule } from '../mcp/google-workspace.module';
 import { BraveModule } from '../webSearch/brave.module';
 import { ResultFormatterService } from './formatters/result-formatter.service';
 import { GreetingResponseService } from './responses/greeting-response.service';
+import { FastIntentRouterService } from './intent/fast-intent-router.service';
+import { LangChainRouterService } from './langchain-router.service';
 
 @Module({
     imports: [ConfigModule, GoogleWorkspaceModule, BraveModule],
@@ -38,6 +40,8 @@ import { GreetingResponseService } from './responses/greeting-response.service';
         StartupValidationService,
         ResultFormatterService,
         GreetingResponseService,
+        FastIntentRouterService,
+        LangChainRouterService,
     ],
     exports: [
         LangChainConfigService,
@@ -54,6 +58,8 @@ import { GreetingResponseService } from './responses/greeting-response.service';
         LangChainCircuitBreakerService,
         StructuredLoggerService,
         StartupValidationService,
+        FastIntentRouterService,
+        LangChainRouterService,
     ],
 })
 export class LangChainModule { }

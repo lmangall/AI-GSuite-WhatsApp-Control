@@ -4,6 +4,7 @@ import { WebhookMessagesPayloadDto } from './dto/webhook-message.dto';
 import { WebhookChatsPayloadDto } from './dto/webhook-chat.dto';
 import { IAgentService } from '../agent/agent.interface';
 import { AGENT_SERVICE } from '../agent/agent.module';
+import { LangChainRouterService } from '../langchain/langchain-router.service';
 
 @Controller()
 export class WebhookController {
@@ -14,6 +15,7 @@ export class WebhookController {
   constructor(
     private readonly whapiService: WhapiService,
     @Inject(AGENT_SERVICE) private readonly agentService: IAgentService,
+    private readonly langChainRouter: LangChainRouterService,
   ) {}
 
   @Post(`:channelId/messages`)
@@ -117,8 +119,8 @@ export class WebhookController {
       await this.whapiService.setTyping(message.chat_id, true);
       this.logger.log(`[${requestId}] ⌨️  Typing indicator started`);
 
-      // Process message with AI agent
-      const aiResponse = await this.agentService.processMessage(userId, originalMessage, requestId);
+      // Process message with intelligent routing (fast-path for simple queries)
+      const aiResponse = await this.langChainRouter.processMessage(userId, originalMessage, requestId);
 
       // Stop typing indicator
       await this.whapiService.setTyping(message.chat_id, false);

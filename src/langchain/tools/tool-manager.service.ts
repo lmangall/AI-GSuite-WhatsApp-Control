@@ -167,10 +167,22 @@ export class LangChainToolManagerService implements ILangChainToolManager {
   }
 
   /**
-   * Get all available tools (MCP + Brave Search)
+   * Get all available tools (MCP + Brave Search) with caching
    */
   async getAllTools(): Promise<LangChainTool[]> {
     try {
+      // Return cached tools if available and recent
+      if (this.tools.size > 0 && this.lastDiscoveryTime) {
+        const cacheAge = Date.now() - this.lastDiscoveryTime.getTime();
+        const maxCacheAge = 5 * 60 * 1000; // 5 minutes
+        
+        if (cacheAge < maxCacheAge) {
+          const cachedTools = Array.from(this.tools.values());
+          this.logger.debug(`🔄 Using cached tools: ${cachedTools.length} tools (cache age: ${Math.round(cacheAge/1000)}s)`);
+          return cachedTools;
+        }
+      }
+      
       const allTools: LangChainTool[] = [];
       
       this.logger.log('🔍 Getting all available tools...');
@@ -204,6 +216,30 @@ export class LangChainToolManagerService implements ILangChainToolManager {
     } catch (error) {
       this.logger.error('❌ Failed to get all tools:', error);
       throw new Error(`Failed to get all tools: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get minimal tools for simple queries (no MCP tools, just basic ones)
+   */
+  async getMinimalTools(): Promise<LangChainTool[]> {
+    try {
+      const minimalTools: LangChainTool[] = [];
+      
+      // Only add Brave Search if enabled (for web search capability)
+      const enabledTools = this.configService.getLangChainConfig().enabledTools;
+      
+      if (enabledTools.includes('brave_search')) {
+        const braveSearchTool = this.createBraveSearchTool();
+        minimalTools.push(braveSearchTool);
+        this.logger.debug('✅ Added Brave search to minimal tools');
+      }
+      
+      this.logger.debug(`🔧 Minimal tools loaded: ${minimalTools.length} tools`);
+      return minimalTools;
+    } catch (error) {
+      this.logger.error('❌ Failed to get minimal tools:', error);
+      return []; // Return empty array as fallback
     }
   }
 

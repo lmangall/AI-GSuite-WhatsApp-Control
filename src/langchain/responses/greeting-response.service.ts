@@ -12,18 +12,19 @@ export class GreetingResponseService {
       "Jarvis, at your service! 👋",
       "Hey Leo! What's up? 🤖",
       "Jarvis here, ready to help! 💪",
-      "Hello there! Jarvis reporting for duty! ⚡",
-      "Hey dude! What can I do for you? 🚀"
+      "Hello there! Jarvis reporting for duty! ⚡"
     ];
 
     const capabilities = [
-      "I can help you with:",
-      "• 📧 **Google Workspace** - Gmail, Calendar, Docs, Sheets, Drive",
-      "• 🔍 **Web Research** - Current info, news, weather, anything online", 
-      "• 💬 **General Knowledge** - Questions, explanations, casual chat",
-      "",
-      "Just tell me what you need!"
-    ];
+  "I can help you with:",
+  "• 📧 **Google Workspace** - Gmail, Calendar, Docs, Sheets, Drive",
+  "• 🗓️ **Assistant management** - Manage my own calendar and schedule tasks",
+  "• 🔍 **Web Research** - Current info, news, weather, anything online", 
+  "• 💬 **General Knowledge** - Questions, explanations, casual chat",
+  "",
+  "Just tell me what you need!"
+];
+
 
     // Pick a random greeting
     const greeting = greetings[Math.floor(Math.random() * greetings.length)];
@@ -50,7 +51,7 @@ export class GreetingResponseService {
   /**
    * Determine if this should be a full greeting or quick greeting
    */
-  shouldllGreeting(userMessage: string, conversationHistory?: any[]): boolean {
+  shouldShowFullGreeting(userMessage: string, conversationHistory?: any[]): boolean {
     // Show full greeting if:
     // 1. No conversation history (first interaction)
     // 2. Last interaction was more than 1 hour ago
@@ -111,14 +112,29 @@ export class GreetingResponseService {
   isSimpleGreeting(message: string): boolean {
     const simpleGreetings = [
       'hi', 'hello', 'hey', 'halo', 'hola', 'yo', 'sup', 'wassup',
-      'good morning', 'good afternoon', 'good evening', 'good night'
+      'good morning', 'good afternoon', 'good evening', 'good night',
+      'hey there', 'hello there', 'hi there', 'howdy', 'greetings'
     ];
 
     const normalizedMessage = message.toLowerCase().trim();
-    return simpleGreetings.some(greeting => 
+    
+    // Exact matches
+    if (simpleGreetings.some(greeting => 
       normalizedMessage === greeting || 
       normalizedMessage === greeting + '!' ||
       normalizedMessage === greeting + '.'
-    );
+    )) {
+      return true;
+    }
+
+    // Pattern matches for variations
+    const greetingPatterns = [
+      /^(hi|hello|hey|halo|hola|yo|sup|wassup)(\s+(there|dude|man|bro))?[!.]?$/i,
+      /^(good\s+(morning|afternoon|evening|night))[!.]?$/i,
+      /^(how\s+(are\s+you|\'s\s+it\s+going))[?!.]?$/i,
+      /^(what\'?s\s+up)[?!.]?$/i
+    ];
+
+    return greetingPatterns.some(pattern => pattern.test(normalizedMessage));
   }
 }

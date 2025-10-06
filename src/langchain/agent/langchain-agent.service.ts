@@ -12,6 +12,7 @@ import { IAgentService } from '../../agent/agent.interface';
 import { BaseAgentService } from '../../agent/base-agent.service';
 import { LangChainConfigService } from '../config/langchain-config.service';
 import { LangChainToolManagerService } from '../tools/tool-manager.service';
+import { GreetingResponseService } from '../responses/greeting-response.service';
 import { LangChainConfig, MessageContext, ConversationMessage } from '../interfaces/langchain-config.interface';
 
 interface LangChainConversationMessage extends ConversationMessage {
@@ -34,6 +35,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     configService: ConfigService,
     private langChainConfigService: LangChainConfigService,
     private toolManager: LangChainToolManagerService,
+    private greetingService: GreetingResponseService,
   ) {
     super(configService);
     this.config = this.langChainConfigService.getLangChainConfig();
@@ -58,15 +60,15 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
         throw new Error(`Configuration validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Initialize models
+      // Initialize models only (lazy load agent executor)
       this.primaryModel = this.createModel(this.config.defaultModel);
       this.fallbackModel = this.createModel(this.config.fallbackModel);
 
-      // Create agent executor with basic setup
-      this.agentExecutor = await this.createAgentExecutor(this.config.defaultModel);
+      // Don't create agent executor here - do it lazily when needed
+      // This avoids loading all tools during startup
       
       this.isInitialized = true;
-      this.logger.log(`✅ LangChain agent initialized with ${this.config.defaultModel} as primary model`);
+      this.logger.log(`✅ LangChain agent initialized with ${this.config.defaultModel} as primary model (lazy tool loading enabled)`);
     } catch (error) {
       this.logger.error('❌ Failed to initialize LangChain agent', error);
       throw error;
@@ -163,7 +165,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
   }
 
   async processMessage(userId: string, userMessage: string, requestId: string): Promise<string> {
-    if (!this.isInitialized || !this.agentExecutor) {
+    if (!this.isInitialized) {
       throw new Error('LangChain agent not initialized');
     }
 
@@ -172,6 +174,33 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     try {
       this.logger.log(`🔄 [${requestId}] Processing message for user ${userId} with ${this.config.defaultModel} model`);
       this.logger.log(`📝 [${requestId}] Message: "${userMessage}"`);
+
+      // Fast-path for simple greetings and capability questions
+      const fastResponse = await this.tryFastPathResponse(userMessage, userId, requestId);
+      if (fastResponse) {
+        const duration = Date.now() - startTime;
+        this.logger.log(`⚡ [${requestId}] Fast-path response completed in ${duration}ms`);
+        
+        // Add to history
+        this.addToHistory(userId, {
+          role: 'user',
+          content: userMessage,
+          timestamp: new Date(),
+        });
+        this.addToHistory(userId, {
+          role: 'assistant',
+          content: fastResponse,
+          timestamp: new Date(),
+        });
+        
+        return fastResponse;
+      }
+
+      // Ensure agent executor is ready for complex queries
+      if (!this.agentExecutor) {
+        this.logger.log(`🔧 [${requestId}] Creating agent executor for complex query...`);
+        this.agentExecutor = await this.createAgentExecutor(this.config.defaultModel);
+      }
 
       // Get conversation history
       const history = this.getUserHistory(userId);
@@ -700,6 +729,64 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
         available: fallbackAvailable,
       },
     };
+  }
+
+  /**
+   * Try to provide a fast-path response for simple queries without loading tools
+   */
+  private async tryFastPathResponse(message: string, userId: string, requestId: string): Promise<string | null> {
+    const normalizedMessage = message.toLowerCase().trim();
+    
+    // Check for simple greetings
+    if (this.greetingService.isSimpleGreeting(message)) {
+      this.logger.log(`⚡ [${requestId}] Fast-path: Simple greeting detected`);
+      const history = this.getUserHistory(userId);
+      const shouldShowFull = this.greetingService.shouldShowFullGreeting(message, history);
+      
+      if (shouldShowFull) {
+        return this.greetingService.generateGreetingResponse(message);
+      } else {
+        return this.greetingService.generateQuickGreeting(message);
+      }
+    }
+    
+    // Check for capability questions
+    const capabilityPatterns = [
+      /what can you do/i,
+      /what do you do/i,
+      /help me/i,
+      /what are your capabilities/i,
+      /what features/i,
+      /how can you help/i
+    ];
+    
+    if (capabilityPatterns.some(pattern => pattern.test(message))) {
+      this.logger.log(`⚡ [${requestId}] Fast-path: Capability question detected`);
+      return this.greetingService.generateGreetingResponse(message);
+    }
+    
+    // Check for simple thank you messages
+    const thankYouPatterns = [
+      /^thanks?!?$/i,
+      /^thank you!?$/i,
+      /^ty!?$/i,
+      /^thx!?$/i
+    ];
+    
+    if (thankYouPatterns.some(pattern => pattern.test(normalizedMessage))) {
+      this.logger.log(`⚡ [${requestId}] Fast-path: Thank you message detected`);
+      const responses = [
+        "You're welcome! 😊",
+        "Happy to help! 🤖",
+        "Anytime! 👍",
+        "No problem! ⚡",
+        "Glad I could help! 🚀"
+      ];
+      return responses[Math.floor(Math.random() * responses.length)];
+    }
+    
+    // No fast-path available
+    return null;
   }
 
   /**

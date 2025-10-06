@@ -3,11 +3,12 @@ import { GeminiAgentService } from './gemini-agent.service';
 import { OpenAIAgentService } from './openai-agent.service';
 import { AgentFactoryService } from './agent-factory.service';
 import { MCPModule } from '../mcp/mcp.module';
+import { LangChainModule } from '../langchain/langchain.module';
 
 const AGENT_SERVICE = 'AGENT_SERVICE';
 
 @Module({
-  imports: [MCPModule],
+  imports: [MCPModule, LangChainModule],
   providers: [
     GeminiAgentService,
     OpenAIAgentService,

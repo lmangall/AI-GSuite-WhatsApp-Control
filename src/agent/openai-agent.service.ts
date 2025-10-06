@@ -65,33 +65,12 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
   private async processWithWebSearch(userId: string, userMessage: string, requestId: string): Promise<string> {
     try {
       this.logger.log(`[${requestId}] 🌐 Processing with web search for user: ${userId}`);
-
-      const history = this.getUserHistory(userId);
-
-      const messages = [
-        { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
-        ...history.map(msg => ({
-          role: msg.role,
-          content: [{ type: 'text', text: typeof msg.content === 'string' ? msg.content : '' }]
-        })),
-        { role: 'user', content: [{ type: 'text', text: userMessage }] }
-      ];
-
-      this.logger.log(`[${requestId}] 💬 Sending to OpenAI with web search: "${userMessage}"`);
-
-      const response = await this.client.responses.create({
-        model: 'gpt-4-turbo-preview',
-        tools: [{ type: 'web_search' }],
-        input: messages as any,
-      });
-
-      const finalResponse = response.output_text;
-      this.logger.log(`[${requestId}] 📤 OpenAI response: "${finalResponse.substring(0, 100)}${finalResponse.length > 100 ? '...' : ''}"`);
-
-      this.addToHistory(userId, { role: 'user', content: userMessage });
-      this.addToHistory(userId, { role: 'assistant', content: finalResponse });
-
-      return finalResponse;
+      
+      // For now, fall back to regular chat completion since web_search tool is not available
+      // In a real implementation, you would integrate with a web search service
+      this.logger.warn(`[${requestId}] ⚠️ Web search requested but not available, using regular chat`);
+      
+      return this.processWithChatCompletion(userId, userMessage, requestId);
     } catch (error: any) {
       this.logger.error(`[${requestId}] ❌ Error with web search, falling back to chat: ${error.message}`);
       return this.processWithChatCompletion(userId, userMessage, requestId);
@@ -106,9 +85,6 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
       this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
 
       const openAITools = this.convertMCPToolsToOpenAI(mcpTools);
-      
-      // Add web search tool
-      openAITools.push({ type: 'web_search' } as any);
 
       const history = this.getUserHistory(userId);
 
@@ -139,12 +115,6 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
 
         const toolResults = await Promise.all(
           assistantMessage.tool_calls.map(async (toolCall) => {
-            // Handle web search tool separately
-            if (toolCall.type === 'web_search') {
-              this.logger.log(`[${requestId}] 🌐 Web search performed by OpenAI`);
-              return null; // OpenAI handles web search internally
-            }
-
             this.logger.log(`[${requestId}] ⚙️  Executing tool: ${toolCall.function.name}`);
             this.logger.log(`[${requestId}] 📝 Arguments: ${toolCall.function.arguments}`);
 
@@ -172,8 +142,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
           })
         );
 
-        // Filter out null results (web search)
-        messages.push(...toolResults.filter(r => r !== null));
+        messages.push(...toolResults);
 
         response = await this.client.chat.completions.create({
           model: 'gpt-4-turbo-preview',

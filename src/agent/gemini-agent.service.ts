@@ -69,7 +69,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
     const functionDeclarations: FunctionDeclaration[] = mcpTools.map(tool => {
       const schema = tool.inputSchema as any;
       const sanitizedSchema = this.sanitizeSchema(schema);
-      
+
       return {
         name: tool.name,
         description: tool.description || `Execute ${tool.name}`,
@@ -114,7 +114,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
       });
 
       const history = this.filterHistoryForGemini(userId);
-      
+
       const chat = this.model.startChat({ history });
 
       this.logger.log(`[${requestId}] 💬 Sending to Gemini: "${userMessage}"`);
@@ -127,7 +127,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
       while (response.functionCalls() && functionCallCount < MAX_FUNCTION_CALLS) {
         functionCallCount++;
         const functionCalls = response.functionCalls();
-        
+
         this.logger.log(`[${requestId}] 🔧 Function call #${functionCallCount}: ${functionCalls.length} tool(s) to execute`);
 
         const functionResponses = await Promise.all(
@@ -137,10 +137,10 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
 
             try {
               const toolResult = await this.mcpService.callTool(call.name, call.args);
-              
+
               this.logger.log(`[${requestId}] ✅ Tool ${call.name} executed successfully`);
               this.logger.log(`[${requestId}] 📊 Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);
-              
+
               return {
                 functionResponse: {
                   name: call.name,
@@ -149,7 +149,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
               };
             } catch (error: any) {
               this.logger.error(`[${requestId}] ❌ Tool ${call.name} failed: ${error.message}`);
-              
+
               return {
                 functionResponse: {
                   name: call.name,

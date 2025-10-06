@@ -185,7 +185,12 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
 
       // Execute the agent with primary model
       this.logger.debug(`🚀 [${requestId}] Invoking agent executor...`);
+      this.logger.debug(`🚀 [${requestId}] Agent executor configured: ${!!this.agentExecutor}`);
+      
       const result = await this.executeWithModel(this.agentExecutor, userMessage, chatHistory, this.config.defaultModel);
+      
+      this.logger.debug(`🚀 [${requestId}] Agent execution returned`);
+      this.logger.debug(`🚀 [${requestId}] Result keys: ${JSON.stringify(Object.keys(result || {}))}`);
       
       // Log intermediate steps if available
       if (result.intermediateSteps && result.intermediateSteps.length > 0) {
@@ -193,7 +198,9 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
         result.intermediateSteps.forEach((step: any, index: number) => {
           const toolName = step.action?.tool || 'unknown';
           const toolInput = JSON.stringify(step.action?.toolInput || {}).substring(0, 100);
+          const observation = step.observation ? step.observation.substring(0, 100) : 'none';
           this.logger.log(`   ${index + 1}. Tool: ${toolName}, Input: ${toolInput}`);
+          this.logger.debug(`      Observation: ${observation}`);
         });
       } else {
         this.logger.warn(`⚠️  [${requestId}] No tools were called by the agent`);
@@ -563,16 +570,34 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     this.logger.debug(`   Chat history length: ${chatHistory.length}`);
     this.logger.debug(`   Timeout: ${timeout}ms`);
     
+    this.logger.debug(`🚀 Creating execution promise...`);
     const executionPromise = executor.invoke({
       input,
       chat_history: chatHistory,
     });
     
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error(`${modelType} model execution timeout after ${timeout}ms`)), timeout)
-    );
+    this.logger.debug(`🚀 Setting up timeout promise...`);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        this.logger.error(`⏱️ Agent execution timeout after ${timeout}ms for model: ${modelType}`);
+        reject(new Error(`${modelType} model execution timeout after ${timeout}ms`));
+      }, timeout);
+      
+      // Store timeout ID for potential cleanup
+      return timeoutId;
+    });
     
-    return Promise.race([executionPromise, timeoutPromise]);
+    try {
+      this.logger.debug(`🚀 Racing execution vs timeout...`);
+      const result = await Promise.race([executionPromise, timeoutPromise]);
+      this.logger.debug(`✅ Agent execution completed successfully for model: ${modelType}`);
+      this.logger.debug(`✅ Result output length: ${result?.output?.length || 0} chars`);
+      return result;
+    } catch (error) {
+      this.logger.error(`❌ Agent execution failed for model: ${modelType}:`, error);
+      this.logger.error(`❌ Error stack:`, error.stack);
+      throw error;
+    }
   }
 
   /**

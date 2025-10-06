@@ -87,48 +87,76 @@ export class LangChainToolManagerService implements ILangChainToolManager {
       description: 'Search the web using Brave Search API for current information, news, and real-time data. Use this when users ask about recent events, current information, or need up-to-date facts.',
       func: async (args: string): Promise<string> => {
         const searchStartTime = Date.now();
+        this.logger.debug(`🔍 [BRAVE_SEARCH] Tool invoked with args: ${JSON.stringify(args)}`);
+        
         try {
           // Parse arguments
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Parsing arguments...`);
           let searchQuery: string;
           if (typeof args === 'string') {
             try {
               const parsed = JSON.parse(args);
               searchQuery = parsed.query || parsed.input || args;
+              this.logger.debug(`🔍 [BRAVE_SEARCH] Parsed JSON args, query: "${searchQuery}"`);
             } catch {
               searchQuery = args;
+              this.logger.debug(`🔍 [BRAVE_SEARCH] Using raw string args: "${searchQuery}"`);
             }
           } else {
             searchQuery = String(args);
+            this.logger.debug(`🔍 [BRAVE_SEARCH] Converted args to string: "${searchQuery}"`);
           }
 
           if (!searchQuery || searchQuery.trim().length === 0) {
+            this.logger.error(`🔍 [BRAVE_SEARCH] Empty search query provided`);
             throw new Error('Search query is required');
           }
 
           // Optimize search query
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Optimizing query...`);
           const optimizedQuery = this.optimizeSearchQuery(searchQuery);
-          
-          this.logger.log(`🔍 Executing Brave search with query: "${optimizedQuery}"`);
+          this.logger.log(`🔍 [BRAVE_SEARCH] Executing search with optimized query: "${optimizedQuery}"`);
 
-          // Execute search
-          const searchResult = await this.braveService.search({
+          // Execute search with timeout
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Creating search promise...`);
+          const searchPromise = this.braveService.search({
             query: optimizedQuery,
-            count: 5, // Limit results for WhatsApp
+            count: 5,
             country: 'us',
             search_lang: 'en'
           });
 
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Creating timeout promise (10s)...`);
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => {
+              this.logger.error(`🔍 [BRAVE_SEARCH] ⏱️ Timeout reached after 10 seconds`);
+              reject(new Error('Brave search timeout after 10 seconds'));
+            }, 10000)
+          );
+
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Racing promises...`);
+          const searchResult = await Promise.race([searchPromise, timeoutPromise]);
+
           const searchDuration = Date.now() - searchStartTime;
           const resultCount = searchResult?.web?.results?.length || 0;
           
-          this.logger.log(`✅ Brave search completed: ${resultCount} results in ${searchDuration}ms`);
+          this.logger.log(`✅ [BRAVE_SEARCH] Search completed: ${resultCount} results in ${searchDuration}ms`);
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Formatting results...`);
 
           // Format results for WhatsApp
-          return this.formatBraveSearchResults(searchResult, searchQuery);
+          const formattedResults = this.formatBraveSearchResults(searchResult, searchQuery);
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Results formatted, length: ${formattedResults.length} chars`);
+          
+          return formattedResults;
         } catch (error) {
           const searchDuration = Date.now() - searchStartTime;
-          this.logger.error(`❌ Brave search failed after ${searchDuration}ms:`, error);
-          throw new Error(`Web search failed: ${error.message}`);
+          this.logger.error(`❌ [BRAVE_SEARCH] Search failed after ${searchDuration}ms:`, error);
+          this.logger.error(`❌ [BRAVE_SEARCH] Error stack:`, error.stack);
+          
+          // Return a user-friendly error message instead of throwing
+          const errorMessage = `I apologize, but I encountered an error while searching for "${args}". The search service may be temporarily unavailable. Error: ${error.message}`;
+          this.logger.debug(`🔍 [BRAVE_SEARCH] Returning error message to agent`);
+          return errorMessage;
         }
       }
     }) as LangChainTool;
@@ -591,18 +619,31 @@ export class LangChainToolManagerService implements ILangChainToolManager {
    */
   private async executeWithTimeout(tool: LangChainTool, args: any, timeout: number): Promise<string> {
     return new Promise((resolve, reject) => {
+      let isResolved = false;
+      
       const timeoutId = setTimeout(() => {
-        reject(new Error(`Tool execution timed out after ${timeout}ms`));
+        if (!isResolved) {
+          isResolved = true;
+          this.logger.error(`⏱️ Tool ${tool.name} execution timed out after ${timeout}ms`);
+          reject(new Error(`Tool execution timed out after ${timeout}ms`));
+        }
       }, timeout);
 
       tool.call(args)
         .then(result => {
-          clearTimeout(timeoutId);
-          resolve(result);
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+            resolve(result);
+          }
         })
         .catch(error => {
-          clearTimeout(timeoutId);
-          reject(error);
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+            this.logger.error(`❌ Tool ${tool.name} execution failed:`, error);
+            reject(error);
+          }
         });
     });
   }

@@ -18,36 +18,43 @@ export class BraveService {
       search_lang: options.search_lang || 'en',
     });
 
-    this.logger.log(`🌐 [BraveService] ⏰ Starting search request`);
+    this.logger.log(`🌐 [BraveService] ⏰ [HTTP 1/3] Starting search request`);
     this.logger.log(`🌐 [BraveService] Query: "${options.query}"`);
-    this.logger.log(`🌐 [BraveService] URL: ${BRAVE_API_URL}?${params}`);
-    this.logger.log(`🌐 [BraveService] API Key configured: ${BRAVE_API_KEY ? 'Yes (length: ' + BRAVE_API_KEY.length + ')' : 'No'}`);
+    this.logger.log(`🌐 [BraveService] API Key configured: ${BRAVE_API_KEY && BRAVE_API_KEY !== '<YOUR_API_KEY_HERE>' ? 'Yes (length: ' + BRAVE_API_KEY.length + ')' : 'NO - MISSING!'}`);
 
     try {
-      this.logger.log(`🌐 [BraveService] ⏰ Making HTTP GET request...`);
-      const response = await this.httpService.axiosRef.get(`${BRAVE_API_URL}?${params}`, {
+      this.logger.log(`🌐 [BraveService] ⏰ [HTTP 2/3] Making HTTP GET request (4s timeout)...`);
+      this.logger.log(`🌐 [BraveService] Full URL: ${BRAVE_API_URL}?${params.toString()}`);
+      
+      const response = await this.httpService.axiosRef.get(`${BRAVE_API_URL}?${params.toString()}`, {
         headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
           'X-Subscription-Token': BRAVE_API_KEY,
         },
         timeout: 4000, // 4 second timeout for HTTP request
       });
-      this.logger.log(`🌐 [BraveService] ✅ HTTP request completed`);
+      this.logger.log(`🌐 [BraveService] ✅ [HTTP 3/3] HTTP request completed`);
 
       const duration = Date.now() - startTime;
-      this.logger.log(`✅ [BraveService] Search successful in ${duration}ms`);
-      this.logger.debug(`🌐 [BraveService] Response status: ${response.status}`);
-      this.logger.debug(`🌐 [BraveService] Response data keys: ${JSON.stringify(Object.keys(response.data || {}))}`);
+      this.logger.log(`✅ [BraveService] Search successful in ${duration}ms, results: ${response.data?.web?.results?.length || 0}`);
 
       return response.data;
     } catch (error) {
       const duration = Date.now() - startTime;
-      this.logger.error(`❌ [BraveService] Search failed after ${duration}ms`);
+      this.logger.error(`❌ [BraveService] ❌ [HTTP FAILED] Search failed after ${duration}ms`);
       this.logger.error(`❌ [BraveService] Error code: ${error.code}`);
       this.logger.error(`❌ [BraveService] Error message: ${error.message}`);
-      this.logger.error(`❌ [BraveService] Response status: ${error.response?.status}`);
-      this.logger.error(`❌ [BraveService] Response data: ${JSON.stringify(error.response?.data)}`);
+      
+      if (error.response) {
+        this.logger.error(`❌ [BraveService] Response status: ${error.response.status}`);
+        this.logger.error(`❌ [BraveService] Response data: ${JSON.stringify(error.response.data)}`);
+      } else {
+        this.logger.error(`❌ [BraveService] No response received (network error or timeout)`);
+      }
       
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        this.logger.error(`❌ [BraveService] HTTP request timed out after 4 seconds`);
         throw new HttpException(
           'Brave Search request timed out. Please try again.',
           408,

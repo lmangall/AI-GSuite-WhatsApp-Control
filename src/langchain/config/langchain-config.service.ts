@@ -14,22 +14,22 @@ export class LangChainConfigService {
       
       // Memory configuration
       memoryType: this.configService.get<'buffer' | 'summary' | 'conversation'>('LANGCHAIN_MEMORY_TYPE', 'conversation'),
-      maxTokens: this.configService.get<number>('LANGCHAIN_MAX_TOKENS', 4000),
-      memoryExpiryHours: this.configService.get<number>('LANGCHAIN_MEMORY_EXPIRY_HOURS', 24),
+      maxTokens: parseInt(this.configService.get<string>('LANGCHAIN_MAX_TOKENS', '4000'), 10),
+      memoryExpiryHours: parseInt(this.configService.get<string>('LANGCHAIN_MEMORY_EXPIRY_HOURS', '24'), 10),
       
       // Tool configuration
       enabledTools: this.configService.get<string>('LANGCHAIN_ENABLED_TOOLS', 'mcp,brave_search').split(','),
-      toolTimeout: this.configService.get<number>('LANGCHAIN_TOOL_TIMEOUT', 30000),
-      maxToolCalls: this.configService.get<number>('LANGCHAIN_MAX_TOOL_CALLS', 5),
+      toolTimeout: parseInt(this.configService.get<string>('LANGCHAIN_TOOL_TIMEOUT', '30000'), 10),
+      maxToolCalls: parseInt(this.configService.get<string>('LANGCHAIN_MAX_TOOL_CALLS', '5'), 10),
       
       // Prompt configuration
       systemPromptPath: this.configService.get<string>('LANGCHAIN_SYSTEM_PROMPT_PATH'),
       promptTemplatesPath: this.configService.get<string>('LANGCHAIN_PROMPT_TEMPLATES_PATH'),
       
       // Performance configuration
-      enableTracing: this.configService.get<boolean>('LANGCHAIN_ENABLE_TRACING', false),
-      enableMetrics: this.configService.get<boolean>('LANGCHAIN_ENABLE_METRICS', true),
-      cacheEnabled: this.configService.get<boolean>('LANGCHAIN_CACHE_ENABLED', true),
+      enableTracing: this.configService.get<string>('LANGCHAIN_ENABLE_TRACING', 'false') === 'true',
+      enableMetrics: this.configService.get<string>('LANGCHAIN_ENABLE_METRICS', 'true') === 'true',
+      cacheEnabled: this.configService.get<string>('LANGCHAIN_CACHE_ENABLED', 'true') === 'true',
     };
   }
 
@@ -55,11 +55,11 @@ export class LangChainConfigService {
   }
 
   getMaxTokens(): number {
-    return this.configService.get<number>('LANGCHAIN_MAX_TOKENS', 4000);
+    return parseInt(this.configService.get<string>('LANGCHAIN_MAX_TOKENS', '4000'), 10);
   }
 
   getMemoryExpiryHours(): number {
-    return this.configService.get<number>('LANGCHAIN_MEMORY_EXPIRY_HOURS', 24);
+    return parseInt(this.configService.get<string>('LANGCHAIN_MEMORY_EXPIRY_HOURS', '24'), 10);
   }
 
   validateConfiguration(): { isValid: boolean; errors: string[] } {

@@ -10,9 +10,9 @@ import { LangChainMemoryManagerService } from '../memory/memory-manager.service'
 import { ConversationContextService } from '../memory/conversation-context.service';
 import { IntentDetectionService } from '../intent/intent-detection.service';
 import { MessageContext } from '../interfaces/langchain-config.interface';
-import { 
-  ILangChainAgentExecutor, 
-  AgentExecutionResult, 
+import {
+  ILangChainAgentExecutor,
+  AgentExecutionResult,
   AgentExecutionStats,
   AgentStep
 } from './agent-executor.interface';
@@ -33,7 +33,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
     private readonly _memoryManager: LangChainMemoryManagerService,
     private readonly contextService: ConversationContextService,
     private readonly intentDetection: IntentDetectionService
-  ) {}
+  ) { }
 
   /**
    * Initialize the agent executor with tools and models
@@ -132,9 +132,9 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       executionResult.success = false;
       executionResult.error = error.message;
       executionResult.executionTime = Date.now() - startTime;
-      
+
       this.logger.error(`Agent execution failed for user ${messageContext.userId}:`, error);
-      
+
       // Try fallback response
       executionResult.response = await this.generateFallbackResponse(messageContext, error.message);
     }
@@ -161,7 +161,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
 
       // Create intent-specific prompt
       await this.promptManager.createContextAwarePrompt(messageContext);
-      
+
       // Update agent with context-aware prompt if needed
       if (this.agentExecutor && messageContext.detectedIntent.intent !== 'general_chat') {
         // For now, we'll use the existing agent but could create intent-specific agents
@@ -182,13 +182,13 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
   async refreshAgent(): Promise<void> {
     try {
       this.logger.debug('Refreshing agent executor...');
-      
+
       // Refresh tools
       await this.toolManager.refreshTools();
-      
+
       // Reinitialize agent
       await this.initializeAgent();
-      
+
       this.logger.log('Agent executor refreshed successfully');
     } catch (error) {
       this.logger.error('Failed to refresh agent:', error);
@@ -203,9 +203,9 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
     const total = this.executionHistory.length;
     const successful = this.executionHistory.filter(r => r.success).length;
     const failed = total - successful;
-    
-    const avgTime = total > 0 
-      ? this.executionHistory.reduce((sum, r) => sum + r.executionTime, 0) / total 
+
+    const avgTime = total > 0
+      ? this.executionHistory.reduce((sum, r) => sum + r.executionTime, 0) / total
       : 0;
 
     const avgTools = total > 0
@@ -248,13 +248,13 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
    */
   private async initializeModels(): Promise<void> {
     const config = this.configService.getLangChainConfig();
-    
+
     try {
       // Initialize primary model
       if (config.defaultModel === 'gemini') {
         this.primaryModel = new ChatGoogleGenerativeAI({
           apiKey: this.configService.getGeminiApiKey(),
-          model: 'gemini-pro',
+          model: 'gemini-2.5-flash',
           temperature: 0.7,
           maxOutputTokens: config.maxTokens
         });
@@ -278,7 +278,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       } else {
         this.fallbackModel = new ChatGoogleGenerativeAI({
           apiKey: this.configService.getGeminiApiKey(),
-          model: 'gemini-pro',
+          model: 'gemini-2.5-flash',
           temperature: 0.7,
           maxOutputTokens: config.maxTokens
         });
@@ -326,7 +326,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
    */
   private extractToolsUsed(intermediateSteps: any[]): string[] {
     const toolsUsed = new Set<string>();
-    
+
     intermediateSteps.forEach(step => {
       if (step.action && step.action.tool) {
         toolsUsed.add(step.action.tool);
@@ -355,7 +355,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
     try {
       // Use prompt manager to create error handling prompt
       this.promptManager.createErrorHandlingPrompt(error, messageContext.messageText);
-      
+
       // Try to get a response using the fallback model
       if (this.fallbackModel) {
         const response = await this.fallbackModel.invoke([
@@ -376,7 +376,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
    */
   private addToExecutionHistory(result: AgentExecutionResult): void {
     this.executionHistory.push(result);
-    
+
     // Keep only recent executions
     if (this.executionHistory.length > this.maxHistorySize) {
       this.executionHistory = this.executionHistory.slice(-this.maxHistorySize);

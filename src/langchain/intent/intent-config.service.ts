@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IntentPattern } from '../interfaces/langchain-config.interface';
-import { 
-  DEFAULT_INTENT_PATTERNS, 
-  INTENT_CONFIDENCE_THRESHOLDS, 
+import {
+  DEFAULT_INTENT_PATTERNS,
+  INTENT_CONFIDENCE_THRESHOLDS,
   INTENT_TOOL_MAPPING,
-  SEARCH_QUERY_PATTERNS 
+  SEARCH_QUERY_PATTERNS
 } from './intent-patterns.config';
 
 @Injectable()
@@ -30,10 +30,10 @@ export class IntentConfigService {
    */
   getConfidenceThresholds() {
     return {
-      high: this.configService.get<number>('LANGCHAIN_INTENT_HIGH_CONFIDENCE', this.confidenceThresholds.HIGH_CONFIDENCE),
-      medium: this.configService.get<number>('LANGCHAIN_INTENT_MEDIUM_CONFIDENCE', this.confidenceThresholds.MEDIUM_CONFIDENCE),
-      low: this.configService.get<number>('LANGCHAIN_INTENT_LOW_CONFIDENCE', this.confidenceThresholds.LOW_CONFIDENCE),
-      fallback: this.configService.get<number>('LANGCHAIN_INTENT_FALLBACK_THRESHOLD', this.confidenceThresholds.FALLBACK_THRESHOLD)
+      high: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_HIGH_CONFIDENCE', String(this.confidenceThresholds.HIGH_CONFIDENCE))),
+      medium: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_MEDIUM_CONFIDENCE', String(this.confidenceThresholds.MEDIUM_CONFIDENCE))),
+      low: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_LOW_CONFIDENCE', String(this.confidenceThresholds.LOW_CONFIDENCE))),
+      fallback: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_FALLBACK_THRESHOLD', String(this.confidenceThresholds.FALLBACK_THRESHOLD)))
     };
   }
 
@@ -42,7 +42,7 @@ export class IntentConfigService {
    */
   getDefaultIntent(): 'web_search' | 'mcp_tools' | 'general_chat' {
     return this.configService.get<'web_search' | 'mcp_tools' | 'general_chat'>(
-      'LANGCHAIN_DEFAULT_INTENT', 
+      'LANGCHAIN_DEFAULT_INTENT',
       'general_chat'
     );
   }
@@ -54,14 +54,14 @@ export class IntentConfigService {
     if (intent === 'web_search') {
       return INTENT_TOOL_MAPPING.web_search;
     }
-    
+
     if (intent === 'mcp_tools') {
       if (subCategory && INTENT_TOOL_MAPPING.mcp_tools[subCategory]) {
         return INTENT_TOOL_MAPPING.mcp_tools[subCategory];
       }
       return INTENT_TOOL_MAPPING.mcp_tools.general;
     }
-    
+
     return INTENT_TOOL_MAPPING.general_chat;
   }
 
@@ -106,7 +106,7 @@ export class IntentConfigService {
    */
   shouldTriggerWebSearch(message: string, confidence: number): boolean {
     const thresholds = this.getConfidenceThresholds();
-    
+
     // High confidence web search intent
     if (confidence >= thresholds.high) {
       return true;
@@ -167,17 +167,17 @@ export class IntentConfigService {
         primaryTool: 'brave_search',
         fallbackBehavior: 'general_chat',
         requiresQuery: true,
-        timeout: this.configService.get<number>('BRAVE_SEARCH_TIMEOUT', 10000)
+        timeout: parseInt(this.configService.get<string>('BRAVE_SEARCH_TIMEOUT', '10000'), 10)
       },
       mcp_tools: {
         discoveryRequired: true,
         fallbackBehavior: 'general_chat',
-        timeout: this.configService.get<number>('MCP_TOOL_TIMEOUT', 30000),
-        maxRetries: this.configService.get<number>('MCP_TOOL_MAX_RETRIES', 2)
+        timeout: parseInt(this.configService.get<string>('MCP_TOOL_TIMEOUT', '30000'), 10),
+        maxRetries: parseInt(this.configService.get<string>('MCP_TOOL_MAX_RETRIES', '2'), 10)
       },
       general_chat: {
         useMemory: true,
-        contextWindow: this.configService.get<number>('LANGCHAIN_MAX_TOKENS', 4000),
+        contextWindow: parseInt(this.configService.get<string>('LANGCHAIN_MAX_TOKENS', '4000'), 10),
         fallbackBehavior: 'error_response'
       }
     };
@@ -197,7 +197,7 @@ export class IntentConfigService {
     // Validate required intents exist
     const requiredIntents = ['web_search', 'mcp_tools', 'general_chat'];
     const configuredIntents = this.intentPatterns.map(p => p.intent);
-    
+
     for (const intent of requiredIntents) {
       if (!configuredIntents.includes(intent as any)) {
         errors.push(`Missing required intent pattern: ${intent}`);
@@ -249,10 +249,10 @@ export class IntentConfigService {
 
     // Load confidence thresholds from environment
     this.confidenceThresholds = {
-      HIGH_CONFIDENCE: this.configService.get<number>('LANGCHAIN_INTENT_HIGH_CONFIDENCE', INTENT_CONFIDENCE_THRESHOLDS.HIGH_CONFIDENCE),
-      MEDIUM_CONFIDENCE: this.configService.get<number>('LANGCHAIN_INTENT_MEDIUM_CONFIDENCE', INTENT_CONFIDENCE_THRESHOLDS.MEDIUM_CONFIDENCE),
-      LOW_CONFIDENCE: this.configService.get<number>('LANGCHAIN_INTENT_LOW_CONFIDENCE', INTENT_CONFIDENCE_THRESHOLDS.LOW_CONFIDENCE),
-      FALLBACK_THRESHOLD: this.configService.get<number>('LANGCHAIN_INTENT_FALLBACK_THRESHOLD', INTENT_CONFIDENCE_THRESHOLDS.FALLBACK_THRESHOLD)
+      HIGH_CONFIDENCE: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_HIGH_CONFIDENCE', String(INTENT_CONFIDENCE_THRESHOLDS.HIGH_CONFIDENCE))),
+      MEDIUM_CONFIDENCE: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_MEDIUM_CONFIDENCE', String(INTENT_CONFIDENCE_THRESHOLDS.MEDIUM_CONFIDENCE))),
+      LOW_CONFIDENCE: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_LOW_CONFIDENCE', String(INTENT_CONFIDENCE_THRESHOLDS.LOW_CONFIDENCE))),
+      FALLBACK_THRESHOLD: parseFloat(this.configService.get<string>('LANGCHAIN_INTENT_FALLBACK_THRESHOLD', String(INTENT_CONFIDENCE_THRESHOLDS.FALLBACK_THRESHOLD)))
     };
 
     this.logger.debug(`Loaded ${this.intentPatterns.length} intent patterns`);

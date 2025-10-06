@@ -88,11 +88,18 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are Jarvis, Leo's personal AI assistant. You have access to tools to help with tasks.
 
-CRITICAL RULES:
-1. For emails: ALWAYS format as "📧 [Subject] - from [Sender Name]" - NO IDs, NO links
-2. Leo's email: l.mangallon@gmail.com (NEVER ask for this again)
-3. Be FAST - execute tools immediately when needed
-4. Keep responses SHORT and casual
+CRITICAL RULES FOR EMAILS:
+1. When Leo asks for emails, you MUST:
+   - First: Call search_gmail_messages to get message IDs
+   - Second: Call get_gmail_messages_content_batch with those IDs to get subjects/senders
+   - Third: Format each email as "📧 [Subject] - from [Sender Name]"
+2. NEVER show message IDs or links to Leo - only subjects and senders
+3. Leo's email: l.mangallon@gmail.com (NEVER ask for this)
+
+OTHER RULES:
+- Be FAST - execute tools immediately when needed
+- Keep responses SHORT and casual
+- If you see subjects and senders in tool results, show them to Leo immediately
 
 Available tools: {tools}
 Tool names: {tool_names}
@@ -121,8 +128,8 @@ If no tools needed, skip to Final Answer directly.`],
       const executor = new AgentExecutor({
         agent,
         tools,
-        verbose: false, // Disable verbose to reduce processing time
-        maxIterations: Math.min(this.config.maxToolCalls, 3), // Limit iterations for faster response
+        verbose: true, // Enable verbose for debugging
+        maxIterations: 5, // Allow enough iterations for email workflow (search + fetch + format)
         returnIntermediateSteps: true,
         handleParsingErrors: true, // Enable parsing error handling
       });
@@ -130,8 +137,8 @@ If no tools needed, skip to Final Answer directly.`],
       this.logger.log(`✅ Agent executor created successfully`);
       this.logger.log(`   - Model: ${modelType}`);
       this.logger.log(`   - Tools: ${tools.length} available`);
-      this.logger.log(`   - Max iterations: ${this.config.maxToolCalls}`);
-      this.logger.log(`   - Verbose: ${this.config.enableTracing}`);
+      this.logger.log(`   - Max iterations: 5`);
+      this.logger.log(`   - Verbose: true`);
       this.logger.log(`   - Tool names: ${tools.map(t => t.name).join(', ')}`);
 
       return executor;
@@ -256,13 +263,14 @@ If no tools needed, skip to Final Answer directly.`],
 
       // Log intermediate steps if available
       if (result.intermediateSteps && result.intermediateSteps.length > 0) {
-        this.logger.log(`🔧 [${requestId}] Agent used ${result.intermediateSteps.length} tool call(s)`);
+        this.logger.log(`🔧 [${requestId}] Agent used ${result.intermediateSteps.length} tool call(s):`);
         result.intermediateSteps.forEach((step: any, index: number) => {
           const toolName = step.action?.tool || 'unknown';
-          const toolInput = JSON.stringify(step.action?.toolInput || {}).substring(0, 100);
-          const observation = step.observation ? step.observation.substring(0, 100) : 'none';
-          this.logger.log(`   ${index + 1}. Tool: ${toolName}, Input: ${toolInput}`);
-          this.logger.debug(`      Observation: ${observation}`);
+          const toolInput = JSON.stringify(step.action?.toolInput || {}).substring(0, 200);
+          const observation = step.observation ? step.observation.substring(0, 300) : 'none';
+          this.logger.log(`   📍 Step ${index + 1}: ${toolName}`);
+          this.logger.log(`      Input: ${toolInput}`);
+          this.logger.log(`      Result: ${observation}...`);
         });
       } else {
         this.logger.warn(`⚠️  [${requestId}] No tools were called by the agent`);
@@ -802,7 +810,7 @@ If no tools needed, skip to Final Answer directly.`],
     chatHistory: BaseMessage[],
     modelType: string
   ): Promise<any> {
-    const timeout = Math.min(this.config.toolTimeout || 20000, 20000); // Max 20 seconds
+    const timeout = Math.min(this.config.toolTimeout || 40000, 40000); // Max 40 seconds for multi-step workflows
 
     this.logger.debug(`🚀 Executing agent with model: ${modelType}`);
     this.logger.debug(`   Input: "${input}"`);

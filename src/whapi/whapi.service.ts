@@ -46,25 +46,25 @@ export class WhapiService implements OnModuleInit {
     }
   }
 
-  async setTyping(to: string, isTyping: boolean = true): Promise<void> {
+  async setTyping(entryId: string, isTyping: boolean = true): Promise<void> {
     try {
-      await fetch(`${this.baseUrl}/presence`, {
-        method: 'POST',
+      await fetch(`${this.baseUrl}/presences/${entryId}`, {
+        method: 'PUT',
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
           authorization: `Bearer ${this.token}`,
         },
         body: JSON.stringify({
-          presence: isTyping ? 'typing' : 'available',
+          presence: isTyping ? 'typing' : 'pause',
           delay: 0,
-          to,
         }),
       });
     } catch (error) {
-      this.logger.warn(`⚠️  Failed to set typing presence: ${error.message}`);
+      this.logger.warn(`⚠️ Failed to set typing presence: ${error.message}`);
     }
   }
+  
 
   async sendMessage(to: string, body: string): Promise<boolean> {
     try {

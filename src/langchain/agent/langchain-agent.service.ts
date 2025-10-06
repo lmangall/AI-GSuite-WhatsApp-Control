@@ -1042,15 +1042,11 @@ If no tools needed, skip to Final Answer directly.`],
       /^unread/i
     ];
 
-    if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {
-      this.logger.log(`⚡ [${requestId}] Fast-path: Email request detected, attempting direct tool execution`);
-      try {
-        return await this.handleEmailRequestDirectly(message, userId, requestId);
-      } catch (error) {
-        this.logger.warn(`⚠️ [${requestId}] Fast email processing failed, falling back to agent: ${error.message}`);
-        // Fall through to normal agent processing
-      }
-    }
+    // DISABLED: Fast-path email processing - broken, needs proper implementation
+    // The search returns only IDs, not content. Agent should handle this properly.
+    // if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {
+    //   ...
+    // }
 
     // No fast-path available
     return null;

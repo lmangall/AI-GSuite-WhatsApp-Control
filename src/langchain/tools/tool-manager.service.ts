@@ -419,6 +419,13 @@ export class LangChainToolManagerService implements ILangChainToolManager {
             return resultText;
           }
           
+          // For search_gmail_messages, pass through the raw result so agent can see message IDs
+          // The agent needs to call get_gmail_messages_content_batch with these IDs
+          if (mcpTool.name === 'search_gmail_messages') {
+            this.logger.debug(`Passing through search results without formatting for ${mcpTool.name}`);
+            return resultText;
+          }
+          
           // Format result using the result formatter for human-friendly display
           return this.resultFormatter.formatToolResult(mcpTool.name!, result);
         } catch (error) {

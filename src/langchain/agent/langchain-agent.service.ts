@@ -135,25 +135,26 @@ CRITICAL RULES:
 Available tools: {tools}
 Tool names: {tool_names}
 
-OUTPUT FORMAT:
+OUTPUT FORMAT (FOLLOW EXACTLY):
 
-When using a tool:
-Thought: [brief thought]
-Action: [tool_name]
-Action Input: {{"parameter": "value"}}
+Step 1 - Use a tool:
+Thought: I need to [action]
+Action: [exact_tool_name]
+Action Input: {{"param": "value"}}
 
-After tool result:
-Thought: [brief thought about result]
-Final Answer: [your response]
+Step 2 - After seeing tool result:
+Thought: The tool returned [result]
+Final Answer: [your response to Leo]
 
-When answering directly (no tool needed):
-Final Answer: [your natural, conversational response]
+OR if no tool needed:
+Final Answer: [your response to Leo]
 
-CRITICAL: 
+CRITICAL FORMAT RULES: 
+- NEVER put multiple actions in one response
+- NEVER put Final Answer on the same line as an Action
 - Keep Final Answer natural and conversational
-- Don't add meta-commentary
-- Just give the answer like you're texting a friend
-- ONE action per iteration - don't chain multiple actions in one response`],
+- Don't add "Let me know..." or other meta-commentary
+- If you see a tool result, immediately give Final Answer`],
         ["placeholder", "{chat_history}"],
         ["human", "{input}"],
         ["assistant", "{agent_scratchpad}"]
@@ -171,34 +172,56 @@ CRITICAL:
         agent,
         tools,
         verbose: true, // Enable verbose for debugging
-        maxIterations: 8, // Increased for complex multi-step tasks like calendar events
+        maxIterations: 10, // Increased for complex multi-step tasks
         returnIntermediateSteps: true,
         handleParsingErrors: (error: Error) => {
           // Custom parsing error handler - extract useful content from malformed responses
-          this.logger.warn(`⚠️ Parsing error occurred: ${error.message}`);
+          this.logger.warn(`⚠️ Parsing error occurred: ${error.message.substring(0, 200)}`);
           
-          // Try to extract a final answer from the malformed output
           const errorMessage = error.message;
+          
+          // Try to extract Final Answer if it exists in the error
+          const finalAnswerMatch = errorMessage.match(/Final Answer:\s*(.+?)(?:\n\n|Troubleshooting|$)/is);
+          if (finalAnswerMatch && finalAnswerMatch[1]) {
+            const answer = finalAnswerMatch[1].trim();
+            if (answer.length > 10 && answer.length < 1000) {
+              this.logger.log(`✅ Extracted Final Answer from parsing error`);
+              return `Final Answer: ${answer}`;
+            }
+          }
           
           // Check if the error contains actual content we can use
           if (errorMessage.includes('Here are your') || errorMessage.includes('📧')) {
-            // Extract the email list or useful content
             const contentMatch = errorMessage.match(/Here are your[^:]*:([\s\S]*?)(?:Let me know|Troubleshooting|$)/i);
             if (contentMatch && contentMatch[1]) {
               const extractedContent = contentMatch[1].trim();
-              this.logger.log(`✅ Extracted useful content from parsing error`);
+              this.logger.log(`✅ Extracted email content from parsing error`);
               return `Final Answer: ${extractedContent}`;
             }
           }
           
-          // Check if it's trying to create an event
-          if (errorMessage.includes('create_event') || errorMessage.includes('calendar')) {
-            this.logger.log(`🗓️ Calendar action detected in parsing error, allowing retry`);
-            return `Invalid format. Use this format:\nThought: [what to do]\nAction: create_event\nAction Input: {parameters}`;
+          // Check if it mentions success/completion
+          if (errorMessage.match(/sent|created|added|done|success|complete/i)) {
+            const successMatch = errorMessage.match(/(?:sent|created|added|done|success|complete)[^.!?]*[.!?]/i);
+            if (successMatch) {
+              this.logger.log(`✅ Extracted success message from parsing error`);
+              return `Final Answer: ${successMatch[0]}`;
+            }
           }
           
-          // Default: ask the agent to reformat properly
-          return `Invalid format. Please respond with ONLY:\nFinal Answer: [your response to Leo]`;
+          // For specific actions, provide targeted guidance
+          if (errorMessage.includes('send_gmail_message') || errorMessage.includes('email')) {
+            this.logger.log(`📧 Email action detected in parsing error`);
+            return `Invalid format. Use:\nThought: I need to send an email\nAction: send_gmail_message\nAction Input: {parameters}`;
+          }
+          
+          if (errorMessage.includes('create_event') || errorMessage.includes('calendar')) {
+            this.logger.log(`🗓️ Calendar action detected in parsing error`);
+            return `Invalid format. Use:\nThought: I need to create a calendar event\nAction: create_event\nAction Input: {parameters}`;
+          }
+          
+          // Default: simple retry instruction
+          return `Invalid format. Respond with ONLY:\nFinal Answer: [your response]`;
         },
       });
 

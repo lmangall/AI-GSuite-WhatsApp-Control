@@ -3,11 +3,11 @@ Jarvis - WhatsApp AI Agent with Google Workspace Integration
 Jarvis is your personal AI assistant accessible through WhatsApp, capable of managing your entire Google Workspace, performing web searches, and engaging in natural conversations.
 
 **Featuring:**
-🪺 NestJS - *dependency injection go brrr~*
-🍆 MCP - *oh yeah, we're that cutting edge*
-🦜 LangChain - *one AI call is never enough*
-🌐 Fully Deployed - *not on localhost, actual internet*
-📱 WhatsApp - *building a UI is for you know, front-end people*
+- 🪺 NestJS - *dependency injection go brrr~*
+- 🍆 MCP - *oh yeah, we're that cutting edge*
+- 🦜 LangChain - *one AI call is never enough*
+- 🌐 Fully Deployed - *not on localhost, actual internet*
+- 📱 WhatsApp - *building a UI is for you know, front-end people*
 
 
  The agent have his own Google Calendar and it can be used as a personification of the agent, to make it more tangible but also have an overview of the scheduled tasks. The agent can decide alone to add to its calendar

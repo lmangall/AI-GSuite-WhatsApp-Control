@@ -115,7 +115,7 @@ export class OpenAIAgentService implements IAgentService, OnModuleInit {
       this.logger.log(`[${requestId}] 💬 Sending to OpenAI: "${userMessage}"`);
 
       let response = await this.client.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-5-nano',
         messages: messages,
         tools: openAITools,
       });

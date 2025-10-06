@@ -553,7 +553,6 @@ Begin!`
       executor.invoke({
         input,
         chat_history: chatHistory,
-        agent_scratchpad: [], // Initialize empty scratchpad for new conversation
       }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error(`${modelType} model execution timeout after ${timeout}ms`)), timeout)

@@ -84,33 +84,19 @@ export class LangChainToolManagerService implements ILangChainToolManager {
   createBraveSearchTool(): LangChainTool {
     const braveSearchTool = new DynamicTool({
       name: 'brave_search',
-      description: 'Search the web using Brave Search API for current information, news, and real-time data. Use this when users ask about recent events, current information, or need up-to-date facts.',
-      func: async (args: string): Promise<string> => {
+      description: 'Search the web using Brave Search API for current information, news, and real-time data. Input should be a search query string.',
+      func: async (query: string): Promise<string> => {
         const searchStartTime = Date.now();
-        this.logger.debug(`🔍 [BRAVE_SEARCH] Tool invoked with args: ${JSON.stringify(args)}`);
+        this.logger.log(`🔍 [BRAVE_SEARCH] Tool invoked with query: "${query}"`);
         
         try {
-          // Parse arguments
-          this.logger.debug(`🔍 [BRAVE_SEARCH] Parsing arguments...`);
-          let searchQuery: string;
-          if (typeof args === 'string') {
-            try {
-              const parsed = JSON.parse(args);
-              searchQuery = parsed.query || parsed.input || args;
-              this.logger.debug(`🔍 [BRAVE_SEARCH] Parsed JSON args, query: "${searchQuery}"`);
-            } catch {
-              searchQuery = args;
-              this.logger.debug(`🔍 [BRAVE_SEARCH] Using raw string args: "${searchQuery}"`);
-            }
-          } else {
-            searchQuery = String(args);
-            this.logger.debug(`🔍 [BRAVE_SEARCH] Converted args to string: "${searchQuery}"`);
+          // Validate query
+          if (!query || typeof query !== 'string' || query.trim().length === 0) {
+            this.logger.error(`🔍 [BRAVE_SEARCH] Invalid or empty search query provided`);
+            throw new Error('Search query is required and must be a non-empty string');
           }
 
-          if (!searchQuery || searchQuery.trim().length === 0) {
-            this.logger.error(`🔍 [BRAVE_SEARCH] Empty search query provided`);
-            throw new Error('Search query is required');
-          }
+          const searchQuery = query.trim();
 
           // Optimize search query
           this.logger.debug(`🔍 [BRAVE_SEARCH] Optimizing query...`);
@@ -163,25 +149,16 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           this.logger.error(`❌ [BRAVE_SEARCH] Error stack:`, error.stack);
           
           // Return a user-friendly error message instead of throwing
-          const errorMessage = `I apologize, but I encountered an error while searching for "${args}". The search service may be temporarily unavailable. Error: ${error.message}`;
-          this.logger.debug(`🔍 [BRAVE_SEARCH] Returning error message to agent`);
+          const errorMessage = `I apologize, but I encountered an error while searching for "${query}". The search service may be temporarily unavailable. Error: ${error.message}`;
+          this.logger.log(`🔍 [BRAVE_SEARCH] Returning error message to agent`);
           return errorMessage;
         }
       }
     }) as LangChainTool;
 
     braveSearchTool.source = 'brave';
-    braveSearchTool.schema = {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'The search query to execute'
-        }
-      },
-      required: ['query']
-    };
-    braveSearchTool.timeout = 15000; // 15 seconds for web search
+    // DynamicTool expects a simple string input, not an object schema
+    braveSearchTool.timeout = 15000;
     braveSearchTool.retries = 1;
 
     return braveSearchTool;

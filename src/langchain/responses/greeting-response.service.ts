@@ -38,11 +38,13 @@ export class GreetingResponseService {
    */
   generateQuickGreeting(userMessage: string): string {
     const quickGreetings = [
-      "Hey! 👋",
-      "Yo Leo! 🤖", 
-      "What's up? 💪",
-      "Hey there! ⚡",
-      "Sup dude! 🚀"
+      "Hey Leo! 👋",
+      "Yo! What's up? 🤖", 
+      "Hey! How can I help? 💪",
+      "Sup! Need anything? ⚡",
+      "Hey there! What do you need? 🚀",
+      "Hi! Ready when you are 👍",
+      "Yo Leo! What's the plan? 🎯"
     ];
 
     return quickGreetings[Math.floor(Math.random() * quickGreetings.length)];

@@ -120,6 +120,9 @@ PERSONALITY:
 WHEN TO USE TOOLS:
 - Emails: Use search_gmail_messages + get_gmail_messages_content_batch
 - Web search: Use brave_search for current info, news, weather
+  * Extract ONLY the search term/company/topic from user's message
+  * Example: "look up Limova.ai" → query: "Limova.ai"
+  * Example: "search for weather in Paris" → query: "weather Paris"
 - Calendar: Use create_event, modify_event, get_events for scheduling
 - For general questions, knowledge, or chat: Just answer directly!
 
@@ -693,8 +696,15 @@ CRITICAL FORMAT RULES:
    * Extract search query from user message
    */
   private extractSearchQuery(message: string): string {
+    // First, try to extract content within quotes
+    const quotedMatch = message.match(/["']([^"']+)["']/);
+    if (quotedMatch && quotedMatch[1]) {
+      return quotedMatch[1].trim();
+    }
+
     // Remove common question words and phrases
     const patterns = [
+      /^(oh and |and |so |well |hey |hi |hello )/i,
       /^(search for|lookup|look up|find|google|what is|what are|tell me about|show me)\s+/i,
       /^(can you|please|could you)\s+(search for|lookup|look up|find|tell me about)\s+/i,
       /^(what.*latest|what.*current|what.*today)\s+/i,

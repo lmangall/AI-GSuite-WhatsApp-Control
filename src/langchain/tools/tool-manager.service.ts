@@ -275,20 +275,38 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         description: mcpTool.description || `MCP tool: ${mcpTool.name}`,
         func: async (args: string): Promise<string> => {
           try {
-            // Parse arguments if they're a string
+            // Improved argument parsing with better error handling
             let parsedArgs: Record<string, any> = {};
+            
             if (typeof args === 'string') {
-              try {
-                parsedArgs = JSON.parse(args);
-              } catch {
-                // If parsing fails, treat as a simple string argument
+              if (args.trim().startsWith('{') || args.trim().startsWith('[')) {
+                try {
+                  parsedArgs = JSON.parse(args);
+                } catch (parseError) {
+                  this.logger.warn(`Failed to parse JSON args for ${mcpTool.name}, using as string:`, parseError.message);
+                  parsedArgs = { input: args };
+                }
+              } else {
+                // Simple string input
                 parsedArgs = { input: args };
               }
-            } else {
+            } else if (args && typeof args === 'object') {
               parsedArgs = args as any;
+            } else {
+              parsedArgs = {};
             }
 
-            this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { args: parsedArgs });
+            // Clean up null/undefined values that might cause schema issues
+            Object.keys(parsedArgs).forEach(key => {
+              if (parsedArgs[key] === null || parsedArgs[key] === undefined) {
+                delete parsedArgs[key];
+              }
+            });
+
+            this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { 
+              originalArgs: args, 
+              parsedArgs: parsedArgs 
+            });
             
             const result = await this.googleWorkspaceService.callTool(mcpTool.name!, parsedArgs);
             
@@ -296,7 +314,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
             return this.resultFormatter.formatToolResult(mcpTool.name!, result);
           } catch (error) {
             this.logger.error(`Error executing MCP tool ${mcpTool.name}:`, error);
-            throw new Error(`MCP tool execution failed: ${error.message}`);
+            // Return a more user-friendly error message
+            return `Sorry, couldn't execute ${mcpTool.name}. ${error.message}`;
           }
         }
       }) as LangChainTool;
@@ -304,8 +323,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
       // Add additional properties
       langChainTool.source = 'mcp';
       langChainTool.schema = mcpTool.inputSchema || {};
-      langChainTool.timeout = 30000;
-      langChainTool.retries = 2;
+      langChainTool.timeout = this.configService.getLangChainConfig().toolTimeout || 10000; // Use config timeout, default 10s
+      langChainTool.retries = 1; // Reduce retries for faster response
 
       // Validate the converted tool
       if (!this.validateToolSchema(langChainTool)) {

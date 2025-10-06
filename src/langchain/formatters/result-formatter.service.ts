@@ -9,27 +9,52 @@ export class ResultFormatterService {
    */
   formatToolResult(toolName: string, result: any): string {
     try {
+      let formatted: string;
+
       // Handle email-related tools
       if (this.isEmailTool(toolName)) {
-        return this.formatEmailResult(result);
+        formatted = this.formatEmailResult(result);
       }
-
       // Handle calendar tools
-      if (this.isCalendarTool(toolName)) {
-        return this.formatCalendarResult(result);
+      else if (this.isCalendarTool(toolName)) {
+        formatted = this.formatCalendarResult(result);
       }
-
       // Handle other Google Workspace tools
-      if (this.isGoogleWorkspaceTool(toolName)) {
-        return this.formatGoogleWorkspaceResult(toolName, result);
+      else if (this.isGoogleWorkspaceTool(toolName)) {
+        formatted = this.formatGoogleWorkspaceResult(toolName, result);
+      }
+      // Default formatting for other tools
+      else {
+        formatted = this.formatGenericResult(result);
       }
 
-      // Default formatting for other tools
-      return this.formatGenericResult(result);
+      // CRITICAL: Remove any remaining links or technical details
+      return this.stripLinksAndTechnicalInfo(formatted);
     } catch (error) {
       this.logger.error(`Error formatting result for tool ${toolName}:`, error);
       return this.formatGenericResult(result);
     }
+  }
+
+  /**
+   * Strip all links and technical information from formatted text
+   */
+  private stripLinksAndTechnicalInfo(text: string): string {
+    if (!text) return text;
+
+    // Remove Gmail links
+    text = text.replace(/Link:\s*https:\/\/mail\.google\.com[^\s\n]*/gi, '');
+    
+    // Remove any other URLs
+    text = text.replace(/https?:\/\/[^\s\n]*/gi, '');
+    
+    // Remove message IDs that might have slipped through
+    text = text.replace(/Message ID:\s*[a-f0-9]+/gi, '');
+    
+    // Remove extra whitespace and empty lines
+    text = text.replace(/\n\s*\n/g, '\n').trim();
+    
+    return text;
   }
 
   /**
@@ -101,6 +126,7 @@ export class ResultFormatterService {
       sender = email.fromName;
     }
 
+    // NEVER include links or IDs - only subject and sender
     return `📧 ${subject} - from ${sender}`;
   }
 

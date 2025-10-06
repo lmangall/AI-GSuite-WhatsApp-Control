@@ -24,7 +24,7 @@ interface LangChainConversationMessage extends ConversationMessage {
 @Injectable()
 export class LangChainAgentService extends BaseAgentService<LangChainConversationMessage> implements IAgentService, OnModuleInit {
   protected readonly logger = new Logger(LangChainAgentService.name);
-  
+
   private config: LangChainConfig;
   private primaryModel: ChatGoogleGenerativeAI | ChatOpenAI | null = null;
   private fallbackModel: ChatGoogleGenerativeAI | ChatOpenAI | null = null;
@@ -66,7 +66,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
 
       // Don't create agent executor here - do it lazily when needed
       // This avoids loading all tools during startup
-      
+
       this.isInitialized = true;
       this.logger.log(`✅ LangChain agent initialized with ${this.config.defaultModel} as primary model (lazy tool loading enabled)`);
     } catch (error) {
@@ -78,10 +78,10 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
   async createAgentExecutor(modelType: 'gemini' | 'openai'): Promise<AgentExecutor> {
     try {
       const model = this.createModel(modelType);
-      
+
       // Load tools from tool manager
       const tools: Tool[] = await this.loadToolsSafely();
-      
+
       this.logger.log(`🔧 Creating agent executor with ${tools.length} tools for ${modelType} model`);
 
       // Create a simplified ReAct prompt optimized for speed and reliability
@@ -126,14 +126,14 @@ If no tools needed, skip to Final Answer directly.`],
         returnIntermediateSteps: true,
         handleParsingErrors: true, // Enable parsing error handling
       });
-      
+
       this.logger.log(`✅ Agent executor created successfully`);
       this.logger.log(`   - Model: ${modelType}`);
       this.logger.log(`   - Tools: ${tools.length} available`);
       this.logger.log(`   - Max iterations: ${this.config.maxToolCalls}`);
       this.logger.log(`   - Verbose: ${this.config.enableTracing}`);
       this.logger.log(`   - Tool names: ${tools.map(t => t.name).join(', ')}`);
-      
+
       return executor;
     } catch (error) {
       this.logger.error(`❌ Failed to create agent executor for ${modelType}`, error);
@@ -148,7 +148,7 @@ If no tools needed, skip to Final Answer directly.`],
         if (!apiKey) {
           throw new Error('Gemini API key not configured');
         }
-        
+
         return new ChatGoogleGenerativeAI({
           apiKey,
           model: 'gemini-2.0-flash-exp',
@@ -160,7 +160,7 @@ If no tools needed, skip to Final Answer directly.`],
         if (!apiKey) {
           throw new Error('OpenAI API key not configured');
         }
-        
+
         return new ChatOpenAI({
           apiKey,
           modelName: 'gpt-4o-mini',
@@ -195,7 +195,7 @@ If no tools needed, skip to Final Answer directly.`],
     }
 
     const startTime = Date.now();
-    
+
     try {
       this.logger.log(`🔄 [${requestId}] Processing message for user ${userId} with ${this.config.defaultModel} model`);
       this.logger.log(`📝 [${requestId}] Message: "${userMessage}"`);
@@ -205,7 +205,7 @@ If no tools needed, skip to Final Answer directly.`],
       if (fastResponse) {
         const duration = Date.now() - startTime;
         this.logger.log(`⚡ [${requestId}] Fast-path response completed in ${duration}ms`);
-        
+
         // Add to history
         this.addToHistory(userId, {
           role: 'user',
@@ -217,7 +217,7 @@ If no tools needed, skip to Final Answer directly.`],
           content: fastResponse,
           timestamp: new Date(),
         });
-        
+
         return fastResponse;
       }
 
@@ -229,7 +229,7 @@ If no tools needed, skip to Final Answer directly.`],
           if (emailResponse) {
             const duration = Date.now() - startTime;
             this.logger.log(`⚡ [${requestId}] Optimized email processing completed in ${duration}ms`);
-            
+
             // Add to history
             this.addToHistory(userId, {
               role: 'user',
@@ -241,7 +241,7 @@ If no tools needed, skip to Final Answer directly.`],
               content: emailResponse,
               timestamp: new Date(),
             });
-            
+
             return emailResponse;
           }
         } catch (error) {
@@ -259,7 +259,7 @@ If no tools needed, skip to Final Answer directly.`],
       // Get conversation history
       const history = this.getUserHistory(userId);
       const chatHistory = this.convertToLangChainMessages(history);
-      
+
       this.logger.debug(`💭 [${requestId}] Chat history: ${chatHistory.length} messages`);
 
       // Log available tools before execution
@@ -269,12 +269,12 @@ If no tools needed, skip to Final Answer directly.`],
       // Execute the agent with primary model
       this.logger.debug(`🚀 [${requestId}] Invoking agent executor...`);
       this.logger.debug(`🚀 [${requestId}] Agent executor configured: ${!!this.agentExecutor}`);
-      
+
       const result = await this.executeWithModel(this.agentExecutor, userMessage, chatHistory, this.config.defaultModel);
-      
+
       this.logger.debug(`🚀 [${requestId}] Agent execution returned`);
       this.logger.debug(`🚀 [${requestId}] Result keys: ${JSON.stringify(Object.keys(result || {}))}`);
-      
+
       // Log intermediate steps if available
       if (result.intermediateSteps && result.intermediateSteps.length > 0) {
         this.logger.log(`🔧 [${requestId}] Agent used ${result.intermediateSteps.length} tool call(s)`);
@@ -305,31 +305,31 @@ If no tools needed, skip to Final Answer directly.`],
       const duration = Date.now() - startTime;
       this.logger.log(`✅ [${requestId}] Successfully processed message for user ${userId} with ${this.config.defaultModel} model (${duration}ms)`);
       this.logger.log(`📤 [${requestId}] Response: "${result.output.substring(0, 150)}${result.output.length > 150 ? '...' : ''}"`);
-      
+
       return result.output;
 
     } catch (error) {
       const duration = Date.now() - startTime;
       this.logger.error(`❌ [${requestId}] Primary model (${this.config.defaultModel}) failed for user ${userId} after ${duration}ms:`, error);
-      
+
       // Try fallback model if primary fails and they're different
       if (this.config.defaultModel !== this.config.fallbackModel) {
         return await this.processMessageWithFallback(userId, userMessage, requestId, startTime);
       }
-      
+
       throw new Error(`Primary model (${this.config.defaultModel}) failed: ${error.message}`);
     }
   }
 
   private async processMessageWithFallback(userId: string, userMessage: string, requestId: string, originalStartTime: number): Promise<string> {
     const fallbackStartTime = Date.now();
-    
+
     try {
       this.logger.warn(`🔄 Switching to fallback model (${this.config.fallbackModel}) for user ${userId} (${requestId})`);
-      
+
       // Create a temporary agent executor with fallback model
       const fallbackExecutor = await this.createAgentExecutor(this.config.fallbackModel);
-      
+
       // Get conversation history
       const history = this.getUserHistory(userId);
       const chatHistory = this.convertToLangChainMessages(history);
@@ -352,23 +352,23 @@ If no tools needed, skip to Final Answer directly.`],
 
       const fallbackDuration = Date.now() - fallbackStartTime;
       const totalDuration = Date.now() - originalStartTime;
-      
+
       this.logger.log(`✅ Successfully processed message with fallback model (${this.config.fallbackModel}) for user ${userId} (fallback: ${fallbackDuration}ms, total: ${totalDuration}ms)`);
-      
+
       // Log model switching event for monitoring
       this.logModelSwitch(userId, this.config.defaultModel, this.config.fallbackModel, 'success', totalDuration);
-      
+
       return result.output;
 
     } catch (error) {
       const fallbackDuration = Date.now() - fallbackStartTime;
       const totalDuration = Date.now() - originalStartTime;
-      
+
       this.logger.error(`❌ Fallback model (${this.config.fallbackModel}) also failed for user ${userId} after ${fallbackDuration}ms:`, error);
-      
+
       // Log failed model switching event
       this.logModelSwitch(userId, this.config.defaultModel, this.config.fallbackModel, 'failed', totalDuration);
-      
+
       throw new Error(`Both primary (${this.config.defaultModel}) and fallback (${this.config.fallbackModel}) models failed`);
     }
   }
@@ -393,7 +393,7 @@ If no tools needed, skip to Final Answer directly.`],
     }
 
     const startTime = Date.now();
-    
+
     try {
       this.logger.log(`🔄 Processing message with intent detection for user ${userId} (${requestId})`);
 
@@ -430,13 +430,13 @@ If no tools needed, skip to Final Answer directly.`],
 
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Intent-based processing completed for user ${userId} (${duration}ms)`);
-      
+
       return result;
 
     } catch (error) {
       const duration = Date.now() - startTime;
       this.logger.error(`❌ Intent-based processing failed for user ${userId} after ${duration}ms:`, error);
-      
+
       // Fallback to regular processing
       this.logger.warn(`🔄 Falling back to regular processing for user ${userId}`);
       return await this.processMessage(userId, message, requestId);
@@ -445,14 +445,14 @@ If no tools needed, skip to Final Answer directly.`],
 
   private detectBasicIntent(message: string): any {
     const lowerMessage = message.toLowerCase();
-    
+
     // Explicit search commands (high confidence)
     const explicitSearchPatterns = [
       /^(search for|lookup|look up|find|google)\s+/i,
       /^(can you|please|could you)\s+(search for|lookup|look up|find)\s+/i,
       /what.*latest|what.*current|what.*today/i
     ];
-    
+
     if (explicitSearchPatterns.some(pattern => pattern.test(message))) {
       return {
         intent: 'web_search',
@@ -460,7 +460,7 @@ If no tools needed, skip to Final Answer directly.`],
         searchQuery: this.extractSearchQuery(message)
       };
     }
-    
+
     // Web search keywords (medium confidence)
     const webSearchKeywords = [
       'latest', 'news', 'current', 'today', 'recent', 'now',
@@ -469,7 +469,7 @@ If no tools needed, skip to Final Answer directly.`],
       'breaking', 'update', 'happening',
       'score', 'result', 'match', 'game'
     ];
-    
+
     const webSearchCount = webSearchKeywords.filter(keyword => lowerMessage.includes(keyword)).length;
     if (webSearchCount > 0) {
       const confidence = Math.min(0.7 + (webSearchCount * 0.1), 0.9);
@@ -487,7 +487,7 @@ If no tools needed, skip to Final Answer directly.`],
       /tell me about.*today/i,
       /what.*new/i
     ];
-    
+
     if (timeSensitivePatterns.some(pattern => pattern.test(message))) {
       return {
         intent: 'web_search',
@@ -535,7 +535,7 @@ If no tools needed, skip to Final Answer directly.`],
 
   private async processWebSearchIntent(userId: string, message: string, requestId: string, _context: MessageContext): Promise<string> {
     this.logger.debug(`Processing web search intent for user ${userId}`);
-    
+
     // For now, just add a note about web search capability
     const baseResponse = await this.processMessage(userId, message, requestId);
     return `🔍 Web search capability detected. ${baseResponse}`;
@@ -543,7 +543,7 @@ If no tools needed, skip to Final Answer directly.`],
 
   private async processMCPToolsIntent(userId: string, message: string, requestId: string, _context: MessageContext): Promise<string> {
     this.logger.debug(`Processing MCP tools intent for user ${userId}`);
-    
+
     // For now, just add a note about MCP tools capability
     const baseResponse = await this.processMessage(userId, message, requestId);
     return `🔧 MCP tools capability detected. ${baseResponse}`;
@@ -564,10 +564,10 @@ If no tools needed, skip to Final Answer directly.`],
     try {
       this.logger.log('🔄 Refreshing tools and recreating agent executor...');
       await this.toolManager.refreshTools();
-      
+
       // Recreate agent executor with updated tools
       this.agentExecutor = await this.createAgentExecutor(this.config.defaultModel);
-      
+
       this.logger.log('✅ Tools refreshed and agent executor updated');
     } catch (error) {
       this.logger.error('❌ Failed to refresh tools:', error);
@@ -580,48 +580,48 @@ If no tools needed, skip to Final Answer directly.`],
    */
   private async loadToolsSafely(): Promise<Tool[]> {
     const loadStartTime = Date.now();
-    
+
     try {
       this.logger.log('🔧 Loading tools from tool manager...');
-      
+
       // Set a timeout for tool loading to prevent hanging
       const toolsPromise = this.toolManager.getAllTools();
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Tool loading timeout')), 10000); // 10 second timeout
       });
-      
+
       const tools = await Promise.race([toolsPromise, timeoutPromise]);
-      
+
       const loadDuration = Date.now() - loadStartTime;
       this.logger.log(`✅ Successfully loaded ${tools.length} tools in ${loadDuration}ms`);
-      
+
       // Log each tool with details (but limit to avoid spam)
       const maxToolsToLog = 5;
       tools.slice(0, maxToolsToLog).forEach((tool, index) => {
         this.logger.log(`   ${index + 1}. ${(tool as any).name} (source: ${(tool as any).source || 'unknown'})`);
         this.logger.debug(`      Description: ${(tool as any).description?.substring(0, 100) || 'No description'}...`);
       });
-      
+
       if (tools.length > maxToolsToLog) {
         this.logger.log(`   ... and ${tools.length - maxToolsToLog} more tools`);
       }
-      
+
       return tools;
     } catch (error) {
       const loadDuration = Date.now() - loadStartTime;
       this.logger.error(`❌ Failed to load tools from tool manager after ${loadDuration}ms, attempting individual tool loading:`, error);
-      
+
       // Try to load essential tools individually as fallback
       const partialTools: Tool[] = [];
-      
+
       // Load tools in parallel with individual timeouts
       const toolLoadPromises = [
         this.loadBraveSearchTool(),
         this.loadMCPTools()
       ];
-      
+
       const results = await Promise.allSettled(toolLoadPromises);
-      
+
       results.forEach((result, index) => {
         if (result.status === 'fulfilled' && result.value.length > 0) {
           partialTools.push(...result.value);
@@ -632,13 +632,13 @@ If no tools needed, skip to Final Answer directly.`],
           this.logger.warn(`❌ ${toolType} tools failed to load:`, result.reason);
         }
       });
-      
+
       if (partialTools.length > 0) {
         this.logger.log(`⚠️ Partial tool loading successful: ${partialTools.length} tools available`);
       } else {
         this.logger.warn('⚠️ No tools could be loaded, agent will work without tools');
       }
-      
+
       return partialTools;
     }
   }
@@ -665,7 +665,7 @@ If no tools needed, skip to Final Answer directly.`],
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('MCP tools loading timeout')), 8000); // 8 second timeout
       });
-      
+
       const mcpTools = await Promise.race([mcpToolsPromise, timeoutPromise]);
       return mcpTools;
     } catch (error) {
@@ -693,7 +693,7 @@ If no tools needed, skip to Final Answer directly.`],
       /check.*enail/i, // Handle typos
       /unread.*enail/i
     ];
-    
+
     return emailPatterns.some(pattern => pattern.test(normalizedMessage));
   }
 
@@ -702,78 +702,78 @@ If no tools needed, skip to Final Answer directly.`],
    */
   private async processEmailRequestOptimized(message: string, userId: string, requestId: string): Promise<string | null> {
     this.logger.log(`📧 [${requestId}] Processing email request with optimized flow`);
-    
+
     try {
       // Get tools quickly
       const tools = await this.getAvailableTools();
       const searchTool = tools.find(tool => (tool as any).name === 'search_gmail_messages');
-      
+
       if (!searchTool) {
         throw new Error('Gmail search tool not available');
       }
-      
+
       // Determine search parameters
       const normalizedMessage = message.toLowerCase();
       let query = 'in:inbox';
       let pageSize = 10;
-      
+
       if (normalizedMessage.includes('unread')) {
         query = 'is:unread in:inbox';
         pageSize = 5; // Fewer unread emails typically
       }
-      
+
       // Execute search with timeout
       this.logger.log(`🔍 [${requestId}] Searching emails: ${query}`);
-      
+
       // Prepare the search parameters
       const searchParams = {
         query: query,
         user_google_email: 'l.mangallon@gmail.com',
         page_size: pageSize
       };
-      
+
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
-      
+
       // Call the tool using the proper LangChain tool interface
       // LangChain DynamicTool expects a string input, so we need to stringify the params
       const searchPromise = searchTool.invoke(JSON.stringify(searchParams));
-      
+
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Email search timeout')), 10000);
       });
-      
+
       const searchResult = await Promise.race([searchPromise, timeoutPromise]);
-      
+
       // Check if this is an authentication request
       if (searchResult && searchResult.includes('ACTION REQUIRED: Google Authentication Needed')) {
         this.logger.log(`🔐 [${requestId}] Authentication required, forwarding auth link to user`);
-        
+
         // Extract the authorization URL from the response
         const authUrlMatch = searchResult.match(/Authorization URL: (https:\/\/[^\s\n]+)/);
         if (authUrlMatch && authUrlMatch[1]) {
           const authUrl = authUrlMatch[1];
           return `🔐 **Google Authentication Required**\n\nTo access your Gmail, please click this link to authorize:\n\n${authUrl}\n\nAfter authorizing, try your request again!`;
         }
-        
+
         // Fallback if URL extraction fails
         return `🔐 **Google Authentication Required**\n\nI need permission to access your Gmail. Please check the logs for the authorization link, or try again in a moment.`;
       }
-      
+
       // Format response quickly
       if (!searchResult || searchResult.includes('No messages found')) {
-        return normalizedMessage.includes('unread') 
+        return normalizedMessage.includes('unread')
           ? "No unread emails! 📭 You're all caught up! 🎉"
           : "No emails found! 📭";
       }
-      
+
       // Simple response without complex parsing
       const emailCount = this.extractEmailCount(searchResult);
-      const responsePrefix = normalizedMessage.includes('unread') 
+      const responsePrefix = normalizedMessage.includes('unread')
         ? `You have ${emailCount} unread email${emailCount !== 1 ? 's' : ''}:`
         : `Here's what you got (${emailCount} email${emailCount !== 1 ? 's' : ''}):`;
-      
+
       return `${responsePrefix}\n\n📧 Check your Gmail for details - I found your emails but need to optimize the display format.`;
-      
+
     } catch (error) {
       this.logger.warn(`❌ [${requestId}] Optimized email processing failed: ${error.message}`);
       return null; // Fall back to normal agent processing
@@ -790,14 +790,14 @@ If no tools needed, skip to Final Answer directly.`],
       /found\s+(\d+)\s+messages?/i,
       /(\d+)\s+results?/i
     ];
-    
+
     for (const pattern of countPatterns) {
       const match = searchResult.match(pattern);
       if (match && match[1]) {
         return parseInt(match[1], 10);
       }
     }
-    
+
     // Fallback: count message indicators
     const messageIndicators = searchResult.match(/Message ID:/g);
     return messageIndicators ? messageIndicators.length : 0;
@@ -818,38 +818,38 @@ If no tools needed, skip to Final Answer directly.`],
    * Execute agent with timeout and error handling
    */
   private async executeWithModel(
-    executor: AgentExecutor, 
-    input: string, 
-    chatHistory: BaseMessage[], 
+    executor: AgentExecutor,
+    input: string,
+    chatHistory: BaseMessage[],
     modelType: string
   ): Promise<any> {
     const timeout = Math.min(this.config.toolTimeout || 20000, 20000); // Max 20 seconds
-    
+
     this.logger.debug(`🚀 Executing agent with model: ${modelType}`);
     this.logger.debug(`   Input: "${input}"`);
     this.logger.debug(`   Chat history length: ${chatHistory.length}`);
     this.logger.debug(`   Timeout: ${timeout}ms`);
-    
+
     // Limit chat history to last 3 messages for faster processing
     const limitedHistory = chatHistory.slice(-3);
-    
+
     this.logger.debug(`🚀 Creating execution promise...`);
     const executionPromise = executor.invoke({
       input,
       chat_history: limitedHistory,
     });
-    
+
     this.logger.debug(`🚀 Setting up timeout promise...`);
     const timeoutPromise = new Promise<never>((_, reject) => {
       const timeoutId = setTimeout(() => {
         this.logger.error(`⏱️ Agent execution timeout after ${timeout}ms for model: ${modelType}`);
         reject(new Error(`${modelType} model execution timeout after ${timeout}ms`));
       }, timeout);
-      
+
       // Store timeout ID for potential cleanup
       return timeoutId;
     });
-    
+
     try {
       this.logger.debug(`🚀 Racing execution vs timeout...`);
       const result = await Promise.race([executionPromise, timeoutPromise]);
@@ -858,40 +858,40 @@ If no tools needed, skip to Final Answer directly.`],
       return result;
     } catch (error) {
       this.logger.error(`❌ Agent execution failed for model: ${modelType}:`, error);
-      
+
       // Check if it's a parsing error and try to extract useful response
       if (error.message.includes('Could not parse LLM output')) {
         this.logger.warn(`🔧 Attempting to extract response from parsing error...`);
-        
+
         // Try multiple extraction patterns
         const patterns = [
           /Could not parse LLM output: (.+?)(?:\nTroubleshooting|$)/s,
           /Could not parse LLM output: (.+?)(?:\n|$)/,
           /output: (.+?)(?:\n|$)/i
         ];
-        
+
         for (const pattern of patterns) {
           const match = error.message.match(pattern);
           if (match && match[1]) {
             let extractedResponse = match[1].trim();
-            
+
             // Clean up the extracted response
             extractedResponse = extractedResponse.replace(/^["']|["']$/g, ''); // Remove quotes
             extractedResponse = extractedResponse.replace(/\\n/g, '\n'); // Fix newlines
-            
+
             if (extractedResponse.length > 0 && extractedResponse.length < 1000) {
               this.logger.log(`✅ Extracted response from parsing error: "${extractedResponse.substring(0, 100)}..."`);
               return { output: extractedResponse };
             }
           }
         }
-        
+
         // If extraction fails, provide a helpful fallback based on the input
         const fallbackResponse = this.generateFallbackResponse(input);
         this.logger.log(`🔧 Using fallback response for parsing error: "${fallbackResponse}"`);
         return { output: fallbackResponse };
       }
-      
+
       throw error;
     }
   }
@@ -900,10 +900,10 @@ If no tools needed, skip to Final Answer directly.`],
    * Log model switching events for monitoring and debugging
    */
   private logModelSwitch(
-    userId: string, 
-    primaryModel: string, 
-    fallbackModel: string, 
-    result: 'success' | 'failed', 
+    userId: string,
+    primaryModel: string,
+    fallbackModel: string,
+    result: 'success' | 'failed',
     duration: number
   ): void {
     const logData = {
@@ -938,7 +938,7 @@ If no tools needed, skip to Final Answer directly.`],
       // Simple health check - try to generate a minimal response
       const testResult = await Promise.race([
         this.primaryModel.invoke([new HumanMessage('test')]),
-        new Promise((_, reject) => 
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Health check timeout')), 5000)
         )
       ]);
@@ -962,7 +962,7 @@ If no tools needed, skip to Final Answer directly.`],
       // Simple health check - try to generate a minimal response
       const testResult = await Promise.race([
         this.fallbackModel.invoke([new HumanMessage('test')]),
-        new Promise((_, reject) => 
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Health check timeout')), 5000)
         )
       ]);
@@ -1003,20 +1003,20 @@ If no tools needed, skip to Final Answer directly.`],
    */
   private async tryFastPathResponse(message: string, userId: string, requestId: string): Promise<string | null> {
     const normalizedMessage = message.toLowerCase().trim();
-    
+
     // Check for simple greetings
     if (this.greetingService.isSimpleGreeting(message)) {
       this.logger.log(`⚡ [${requestId}] Fast-path: Simple greeting detected`);
       const history = this.getUserHistory(userId);
       const shouldShowFull = this.greetingService.shouldShowFullGreeting(message, history);
-      
+
       if (shouldShowFull) {
         return this.greetingService.generateGreetingResponse(message);
       } else {
         return this.greetingService.generateQuickGreeting(message);
       }
     }
-    
+
     // Check for capability questions
     const capabilityPatterns = [
       /what can you do/i,
@@ -1026,12 +1026,12 @@ If no tools needed, skip to Final Answer directly.`],
       /what features/i,
       /how can you help/i
     ];
-    
+
     if (capabilityPatterns.some(pattern => pattern.test(message))) {
       this.logger.log(`⚡ [${requestId}] Fast-path: Capability question detected`);
       return this.greetingService.generateGreetingResponse(message);
     }
-    
+
     // Check for simple thank you messages
     const thankYouPatterns = [
       /^thanks?!?$/i,
@@ -1039,7 +1039,7 @@ If no tools needed, skip to Final Answer directly.`],
       /^ty!?$/i,
       /^thx!?$/i
     ];
-    
+
     if (thankYouPatterns.some(pattern => pattern.test(normalizedMessage))) {
       this.logger.log(`⚡ [${requestId}] Fast-path: Thank you message detected`);
       const responses = [
@@ -1051,7 +1051,7 @@ If no tools needed, skip to Final Answer directly.`],
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
-    
+
     // Check for email requests - try fast email processing
     const emailPatterns = [
       /^check.*email/i,
@@ -1062,7 +1062,7 @@ If no tools needed, skip to Final Answer directly.`],
       /^email/i,
       /^unread/i
     ];
-    
+
     if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {
       this.logger.log(`⚡ [${requestId}] Fast-path: Email request detected, attempting direct tool execution`);
       try {
@@ -1072,7 +1072,7 @@ If no tools needed, skip to Final Answer directly.`],
         // Fall through to normal agent processing
       }
     }
-    
+
     // No fast-path available
     return null;
   }
@@ -1082,44 +1082,46 @@ If no tools needed, skip to Final Answer directly.`],
    */
   private async handleEmailRequestDirectly(message: string, userId: string, requestId: string): Promise<string> {
     this.logger.log(`📧 [${requestId}] Processing email request directly`);
-    
+
     // Load tools if not already loaded
     const tools = await this.getAvailableTools();
     const searchTool = tools.find(tool => (tool as any).name === 'search_gmail_messages');
-    
+
     if (!searchTool) {
       throw new Error('Gmail search tool not available');
     }
-    
+
     // Determine search query based on message
     const normalizedMessage = message.toLowerCase();
     let query = 'in:inbox';
-    
+
     if (normalizedMessage.includes('unread')) {
       query = 'is:unread in:inbox';
     }
-    
+
     try {
       // Call the search tool directly
       this.logger.log(`🔍 [${requestId}] Searching emails with query: ${query}`);
-      
+
       // Prepare the search parameters
       const searchParams = {
         query: query,
         user_google_email: 'l.mangallon@gmail.com',
         page_size: 10
       };
-      
+
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
-      
+
       const searchResult = await searchTool.invoke(JSON.stringify(searchParams));
-      
-      // Check if this is an authentication request
+
+      // Check if this is an authentication request or error
       this.logger.debug(`🔍 [${requestId}] Search result preview: ${searchResult?.substring(0, 200)}...`);
-      
-      if (searchResult && searchResult.includes('ACTION REQUIRED: Google Authentication Needed')) {
+
+      // Check for authentication errors (can be wrapped in "Error calling tool" prefix)
+      if (searchResult && (searchResult.includes('ACTION REQUIRED: Google Authentication Needed') ||
+        searchResult.includes('Google Authentication Needed'))) {
         this.logger.log(`🔐 [${requestId}] Authentication required, forwarding auth link to user`);
-        
+
         // Extract the authorization URL from the response
         const authUrlMatch = searchResult.match(/Authorization URL: (https:\/\/[^\s\n]+)/);
         if (authUrlMatch && authUrlMatch[1]) {
@@ -1127,31 +1129,37 @@ If no tools needed, skip to Final Answer directly.`],
           this.logger.log(`🔐 [${requestId}] Extracted auth URL: ${authUrl.substring(0, 100)}...`);
           return `🔐 **Google Authentication Required**\n\nTo access your Gmail, please click this link to authorize:\n\n${authUrl}\n\nAfter authorizing, try your request again!`;
         }
-        
+
         // Fallback if URL extraction fails
         this.logger.warn(`🔐 [${requestId}] Could not extract auth URL from response`);
         return `🔐 **Google Authentication Required**\n\nI need permission to access your Gmail. Please check the logs for the authorization link, or try again in a moment.`;
       }
-      
+
+      // Check for any other errors from the tool
+      if (searchResult && searchResult.includes('Error calling tool')) {
+        this.logger.error(`❌ [${requestId}] Tool returned an error: ${searchResult.substring(0, 300)}`);
+        throw new Error(`Gmail tool error: ${searchResult.substring(0, 200)}`);
+      }
+
       // Parse and format the results
       if (searchResult && searchResult.includes('No messages found')) {
         return "No emails found! 📭";
       }
-      
+
       // Extract email info and format properly
       const formattedEmails = this.formatEmailResults(searchResult);
-      
+
       if (formattedEmails.length === 0) {
         return "No emails found! 📭";
       }
-      
-      const response = normalizedMessage.includes('unread') 
+
+      const response = normalizedMessage.includes('unread')
         ? `Here are your unread emails:\n\n${formattedEmails.join('\n')}`
         : `Here's what you got:\n\n${formattedEmails.join('\n')}`;
-      
+
       this.logger.log(`✅ [${requestId}] Direct email processing completed`);
       return response;
-      
+
     } catch (error) {
       this.logger.error(`❌ [${requestId}] Direct email processing failed:`, error);
       throw error;
@@ -1163,11 +1171,11 @@ If no tools needed, skip to Final Answer directly.`],
    */
   private formatEmailResults(searchResult: string): string[] {
     const emails: string[] = [];
-    
+
     try {
       // Look for patterns in the search result that indicate emails
       const lines = searchResult.split('\n');
-      
+
       for (const line of lines) {
         // Look for message entries (this is a simplified parser)
         if (line.includes('Message ID:') || line.includes('Subject:') || line.includes('From:')) {
@@ -1176,17 +1184,17 @@ If no tools needed, skip to Final Answer directly.`],
           continue;
         }
       }
-      
+
       // If we can't parse properly, throw to fall back to agent
       if (emails.length === 0) {
         throw new Error('Could not parse email results');
       }
-      
+
     } catch (error) {
       this.logger.debug(`Could not parse email results directly: ${error.message}`);
       throw error;
     }
-    
+
     return emails;
   }
 
@@ -1195,19 +1203,19 @@ If no tools needed, skip to Final Answer directly.`],
    */
   private generateFallbackResponse(input: string): string {
     const normalizedInput = input.toLowerCase();
-    
+
     if (normalizedInput.includes('email')) {
       return "I understand you want to check your emails. Let me try a different approach - could you be more specific about what you're looking for?";
     }
-    
+
     if (normalizedInput.includes('search') || normalizedInput.includes('find')) {
       return "I can help you search for information. Could you tell me more specifically what you're looking for?";
     }
-    
+
     if (normalizedInput.includes('calendar') || normalizedInput.includes('schedule')) {
       return "I can help with your calendar. What would you like me to do - check your schedule, create an event, or something else?";
     }
-    
+
     return "I'm having trouble processing that request right now. Could you try rephrasing it or being more specific about what you need?";
   }
 
@@ -1217,20 +1225,20 @@ If no tools needed, skip to Final Answer directly.`],
   async switchToFallbackModel(): Promise<void> {
     try {
       this.logger.warn(`🔄 Manually switching to fallback model (${this.config.fallbackModel})`);
-      
+
       // Create new agent executor with fallback model
       this.agentExecutor = await this.createAgentExecutor(this.config.fallbackModel);
-      
+
       // Swap the models
       const temp = this.primaryModel;
       this.primaryModel = this.fallbackModel;
       this.fallbackModel = temp;
-      
+
       // Update config to reflect the switch
       const tempModelName = this.config.defaultModel;
       this.config.defaultModel = this.config.fallbackModel;
       this.config.fallbackModel = tempModelName;
-      
+
       this.logger.log(`✅ Successfully switched to fallback model (${this.config.defaultModel})`);
     } catch (error) {
       this.logger.error('❌ Failed to switch to fallback model:', error);

@@ -63,7 +63,7 @@ export interface ToolExecutionResult {
 
 // Intent routing interfaces
 export interface RoutingDecision {
-  intent: 'web_search' | 'mcp_tools' | 'general_chat';
+  intent: 'web_search' | 'mcp_tools' | 'general_chat' | 'greeting';
   confidence: number;
   toolsToUse: string[];
   searchQuery?: string;

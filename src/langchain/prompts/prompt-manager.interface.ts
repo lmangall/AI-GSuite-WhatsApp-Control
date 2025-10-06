@@ -59,7 +59,7 @@ export interface PromptTemplateConfig {
 
 export interface PromptStrategy {
   name: string;
-  intent: 'web_search' | 'mcp_tools' | 'general_chat';
+  intent: 'web_search' | 'mcp_tools' | 'general_chat' | 'greeting';
   systemPrompt: string;
   userPromptTemplate: string;
   contextInstructions: string;

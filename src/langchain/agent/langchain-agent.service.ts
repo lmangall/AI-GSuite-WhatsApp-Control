@@ -913,12 +913,14 @@ CRITICAL:
 
       const formatted = this.emailHandler.formatEmailsForDisplay(result.emails);
       
-      // Simple prefix without redundant count
-      const prefix = unreadOnly 
-        ? `Unread emails:\n\n`
-        : `Recent emails:\n\n`;
+      // Format with count and helpful suffix
+      const emailType = unreadOnly ? 'unread' : 'recent';
+      const header = `Here you go, ${emailType} squad (${result.emails.length}):\n`;
+      const footer = result.emails.length > 0 
+        ? '\n\nWant me to pull full content for any of these? Just tell me the number.'
+        : '';
 
-      return prefix + formatted;
+      return header + formatted + footer;
 
     } catch (error) {
       this.logger.error(`❌ [${requestId}] Email request failed:`, error);

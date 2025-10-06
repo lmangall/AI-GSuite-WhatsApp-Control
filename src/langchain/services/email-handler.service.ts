@@ -86,11 +86,11 @@ export class EmailHandlerService {
       return "No emails found! 📭";
     }
 
-    const formatted = emails.map((email) => {
-      return `${email.subject} - from ${email.sender}`;
+    const formatted = emails.map((email, index) => {
+      return `${index + 1}) 📧 ${email.subject} - from ${email.sender}`;
     });
 
-    return formatted.join('\n\n'); // Double newline for better WhatsApp formatting
+    return formatted.join('\n');
   }
 
   /**

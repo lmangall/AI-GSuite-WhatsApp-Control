@@ -10,6 +10,7 @@ import { Tool } from '@langchain/core/tools';
 import { IAgentService } from '../../agent/agent.interface';
 import { BaseAgentService } from '../../agent/base-agent.service';
 import { LangChainConfigService } from '../config/langchain-config.service';
+import { LangChainToolManagerService } from '../tools/tool-manager.service';
 import { LangChainConfig, MessageContext, ConversationMessage } from '../interfaces/langchain-config.interface';
 
 interface LangChainConversationMessage extends ConversationMessage {
@@ -31,6 +32,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
   constructor(
     configService: ConfigService,
     private langChainConfigService: LangChainConfigService,
+    private toolManager: LangChainToolManagerService,
   ) {
     super(configService);
     this.config = this.langChainConfigService.getLangChainConfig();
@@ -74,8 +76,8 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     try {
       const model = this.createModel(modelType);
       
-      // For now, create with empty tools array - will be populated in later tasks
-      const tools: Tool[] = [];
+      // Load tools from tool manager
+      const tools: Tool[] = await this.loadToolsSafely();
 
       // Create a ReAct prompt template with required variables
       const prompt = ChatPromptTemplate.fromMessages([
@@ -352,13 +354,53 @@ Begin!`
   private detectBasicIntent(message: string): any {
     const lowerMessage = message.toLowerCase();
     
-    // Web search keywords
-    const webSearchKeywords = ['search', 'latest', 'news', 'current', 'today', 'weather', 'stock', 'price'];
-    if (webSearchKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    // Explicit search commands (high confidence)
+    const explicitSearchPatterns = [
+      /^(search for|lookup|look up|find|google)\s+/i,
+      /^(can you|please|could you)\s+(search for|lookup|look up|find)\s+/i,
+      /what.*latest|what.*current|what.*today/i
+    ];
+    
+    if (explicitSearchPatterns.some(pattern => pattern.test(message))) {
       return {
         intent: 'web_search',
-        confidence: 0.8,
-        searchQuery: message
+        confidence: 0.95,
+        searchQuery: this.extractSearchQuery(message)
+      };
+    }
+    
+    // Web search keywords (medium confidence)
+    const webSearchKeywords = [
+      'latest', 'news', 'current', 'today', 'recent', 'now',
+      'weather', 'temperature', 'forecast',
+      'stock', 'price', 'market', 'trading',
+      'breaking', 'update', 'happening',
+      'score', 'result', 'match', 'game'
+    ];
+    
+    const webSearchCount = webSearchKeywords.filter(keyword => lowerMessage.includes(keyword)).length;
+    if (webSearchCount > 0) {
+      const confidence = Math.min(0.7 + (webSearchCount * 0.1), 0.9);
+      return {
+        intent: 'web_search',
+        confidence,
+        searchQuery: this.extractSearchQuery(message)
+      };
+    }
+
+    // Time-sensitive questions (medium confidence)
+    const timeSensitivePatterns = [
+      /what.*happening/i,
+      /what.*going on/i,
+      /tell me about.*today/i,
+      /what.*new/i
+    ];
+    
+    if (timeSensitivePatterns.some(pattern => pattern.test(message))) {
+      return {
+        intent: 'web_search',
+        confidence: 0.75,
+        searchQuery: this.extractSearchQuery(message)
       };
     }
 
@@ -379,6 +421,26 @@ Begin!`
     };
   }
 
+  /**
+   * Extract search query from user message
+   */
+  private extractSearchQuery(message: string): string {
+    // Remove common question words and phrases
+    const patterns = [
+      /^(search for|lookup|look up|find|google|what is|what are|tell me about|show me)\s+/i,
+      /^(can you|please|could you)\s+(search for|lookup|look up|find|tell me about)\s+/i,
+      /^(what.*latest|what.*current|what.*today)\s+/i,
+      /\?$/
+    ];
+
+    let query = message;
+    patterns.forEach(pattern => {
+      query = query.replace(pattern, '');
+    });
+
+    return query.trim() || message;
+  }
+
   private async processWebSearchIntent(userId: string, message: string, requestId: string, _context: MessageContext): Promise<string> {
     this.logger.debug(`Processing web search intent for user ${userId}`);
     
@@ -395,15 +457,74 @@ Begin!`
     return `🔧 MCP tools capability detected. ${baseResponse}`;
   }
 
-  // Method to get available tools (will be implemented in later tasks)
+  // Method to get available tools
   async getAvailableTools(): Promise<Tool[]> {
-    // Return empty array for now - will be populated in later tasks
-    return [];
+    try {
+      return await this.toolManager.getAllTools();
+    } catch (error) {
+      this.logger.error('❌ Failed to get available tools:', error);
+      return [];
+    }
   }
 
-  // Method to refresh tools (will be implemented in later tasks)
+  // Method to refresh tools
   async refreshTools(): Promise<void> {
-    this.logger.log('🔄 Refreshing tools (placeholder - will be implemented in later tasks)');
+    try {
+      this.logger.log('🔄 Refreshing tools and recreating agent executor...');
+      await this.toolManager.refreshTools();
+      
+      // Recreate agent executor with updated tools
+      this.agentExecutor = await this.createAgentExecutor(this.config.defaultModel);
+      
+      this.logger.log('✅ Tools refreshed and agent executor updated');
+    } catch (error) {
+      this.logger.error('❌ Failed to refresh tools:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load tools safely with error handling and graceful degradation
+   */
+  private async loadToolsSafely(): Promise<Tool[]> {
+    try {
+      this.logger.debug('🔧 Loading tools from tool manager...');
+      const tools = await this.toolManager.getAllTools();
+      
+      this.logger.log(`✅ Successfully loaded ${tools.length} tools: ${tools.map(t => t.name).join(', ')}`);
+      return tools;
+    } catch (error) {
+      this.logger.error('❌ Failed to load tools from tool manager, attempting individual tool loading:', error);
+      
+      // Try to load tools individually as fallback
+      const partialTools: Tool[] = [];
+      
+      try {
+        // Try to load Brave search tool specifically
+        const braveSearchTool = this.toolManager.createBraveSearchTool();
+        partialTools.push(braveSearchTool);
+        this.logger.log('✅ Brave search tool loaded individually');
+      } catch (braveError) {
+        this.logger.warn('❌ Brave search tool failed to load individually:', braveError);
+      }
+      
+      try {
+        // Try to load MCP tools
+        const mcpTools = await this.toolManager.discoverMCPTools();
+        partialTools.push(...mcpTools);
+        this.logger.log(`✅ ${mcpTools.length} MCP tools loaded individually`);
+      } catch (mcpError) {
+        this.logger.warn('❌ MCP tools failed to load individually:', mcpError);
+      }
+      
+      if (partialTools.length > 0) {
+        this.logger.log(`⚠️ Partial tool loading successful: ${partialTools.length} tools available`);
+      } else {
+        this.logger.warn('⚠️ No tools could be loaded, agent will work without tools');
+      }
+      
+      return partialTools;
+    }
   }
 
   // Method to get memory for user (will be implemented in later tasks)

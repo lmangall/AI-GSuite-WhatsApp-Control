@@ -81,6 +81,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
       name: 'brave_search',
       description: 'Search the web using Brave Search API for current information, news, and real-time data. Use this when users ask about recent events, current information, or need up-to-date facts.',
       func: async (args: string): Promise<string> => {
+        const searchStartTime = Date.now();
         try {
           // Parse arguments
           let searchQuery: string;
@@ -102,7 +103,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           // Optimize search query
           const optimizedQuery = this.optimizeSearchQuery(searchQuery);
           
-          this.logger.debug(`Executing Brave search with query: "${optimizedQuery}"`);
+          this.logger.log(`🔍 Executing Brave search with query: "${optimizedQuery}"`);
 
           // Execute search
           const searchResult = await this.braveService.search({
@@ -112,10 +113,16 @@ export class LangChainToolManagerService implements ILangChainToolManager {
             search_lang: 'en'
           });
 
+          const searchDuration = Date.now() - searchStartTime;
+          const resultCount = searchResult?.web?.results?.length || 0;
+          
+          this.logger.log(`✅ Brave search completed: ${resultCount} results in ${searchDuration}ms`);
+
           // Format results for WhatsApp
           return this.formatBraveSearchResults(searchResult, searchQuery);
         } catch (error) {
-          this.logger.error('Brave search failed:', error);
+          const searchDuration = Date.now() - searchStartTime;
+          this.logger.error(`❌ Brave search failed after ${searchDuration}ms:`, error);
           throw new Error(`Web search failed: ${error.message}`);
         }
       }

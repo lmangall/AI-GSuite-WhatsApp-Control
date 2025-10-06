@@ -79,6 +79,8 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       
       // Load tools from tool manager
       const tools: Tool[] = await this.loadToolsSafely();
+      
+      this.logger.log(`🔧 Creating agent executor with ${tools.length} tools for ${modelType} model`);
 
       // Use the standard ReAct prompt from LangChain hub
       const prompt = await pull<ChatPromptTemplate>("hwchase17/react-chat");
@@ -91,13 +93,22 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       });
 
       // Create and return the agent executor
-      return new AgentExecutor({
+      const executor = new AgentExecutor({
         agent,
         tools,
         verbose: this.config.enableTracing,
         maxIterations: this.config.maxToolCalls,
         returnIntermediateSteps: true,
       });
+      
+      this.logger.log(`✅ Agent executor created successfully`);
+      this.logger.log(`   - Model: ${modelType}`);
+      this.logger.log(`   - Tools: ${tools.length} available`);
+      this.logger.log(`   - Max iterations: ${this.config.maxToolCalls}`);
+      this.logger.log(`   - Verbose: ${this.config.enableTracing}`);
+      this.logger.log(`   - Tool names: ${tools.map(t => t.name).join(', ')}`);
+      
+      return executor;
     } catch (error) {
       this.logger.error(`❌ Failed to create agent executor for ${modelType}`, error);
       throw error;
@@ -159,14 +170,34 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     const startTime = Date.now();
     
     try {
-      this.logger.log(`🔄 Processing message for user ${userId} (${requestId}) with ${this.config.defaultModel} model`);
+      this.logger.log(`🔄 [${requestId}] Processing message for user ${userId} with ${this.config.defaultModel} model`);
+      this.logger.log(`📝 [${requestId}] Message: "${userMessage}"`);
 
       // Get conversation history
       const history = this.getUserHistory(userId);
       const chatHistory = this.convertToLangChainMessages(history);
+      
+      this.logger.debug(`💭 [${requestId}] Chat history: ${chatHistory.length} messages`);
+
+      // Log available tools before execution
+      const availableTools = await this.getAvailableTools();
+      this.logger.log(`🛠️  [${requestId}] Available tools: ${availableTools.length} (${availableTools.map(t => t.name).join(', ')})`);
 
       // Execute the agent with primary model
+      this.logger.debug(`🚀 [${requestId}] Invoking agent executor...`);
       const result = await this.executeWithModel(this.agentExecutor, userMessage, chatHistory, this.config.defaultModel);
+      
+      // Log intermediate steps if available
+      if (result.intermediateSteps && result.intermediateSteps.length > 0) {
+        this.logger.log(`🔧 [${requestId}] Agent used ${result.intermediateSteps.length} tool call(s)`);
+        result.intermediateSteps.forEach((step: any, index: number) => {
+          const toolName = step.action?.tool || 'unknown';
+          const toolInput = JSON.stringify(step.action?.toolInput || {}).substring(0, 100);
+          this.logger.log(`   ${index + 1}. Tool: ${toolName}, Input: ${toolInput}`);
+        });
+      } else {
+        this.logger.warn(`⚠️  [${requestId}] No tools were called by the agent`);
+      }
 
       // Add messages to history
       this.addToHistory(userId, {
@@ -182,12 +213,14 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       });
 
       const duration = Date.now() - startTime;
-      this.logger.log(`✅ Successfully processed message for user ${userId} with ${this.config.defaultModel} model (${duration}ms)`);
+      this.logger.log(`✅ [${requestId}] Successfully processed message for user ${userId} with ${this.config.defaultModel} model (${duration}ms)`);
+      this.logger.log(`📤 [${requestId}] Response: "${result.output.substring(0, 150)}${result.output.length > 150 ? '...' : ''}"`);
+      
       return result.output;
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      this.logger.error(`❌ Primary model (${this.config.defaultModel}) failed for user ${userId} after ${duration}ms:`, error);
+      this.logger.error(`❌ [${requestId}] Primary model (${this.config.defaultModel}) failed for user ${userId} after ${duration}ms:`, error);
       
       // Try fallback model if primary fails and they're different
       if (this.config.defaultModel !== this.config.fallbackModel) {
@@ -457,10 +490,17 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
    */
   private async loadToolsSafely(): Promise<Tool[]> {
     try {
-      this.logger.debug('🔧 Loading tools from tool manager...');
+      this.logger.log('🔧 Loading tools from tool manager...');
       const tools = await this.toolManager.getAllTools();
       
-      this.logger.log(`✅ Successfully loaded ${tools.length} tools: ${tools.map(t => t.name).join(', ')}`);
+      this.logger.log(`✅ Successfully loaded ${tools.length} tools`);
+      
+      // Log each tool with details
+      tools.forEach((tool, index) => {
+        this.logger.log(`   ${index + 1}. ${tool.name} (source: ${(tool as any).source || 'unknown'})`);
+        this.logger.debug(`      Description: ${tool.description}`);
+      });
+      
       return tools;
     } catch (error) {
       this.logger.error('❌ Failed to load tools from tool manager, attempting individual tool loading:', error);
@@ -518,15 +558,21 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
   ): Promise<any> {
     const timeout = this.config.toolTimeout || 30000;
     
-    return Promise.race([
-      executor.invoke({
-        input,
-        chat_history: chatHistory,
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`${modelType} model execution timeout after ${timeout}ms`)), timeout)
-      )
-    ]);
+    this.logger.debug(`🚀 Executing agent with model: ${modelType}`);
+    this.logger.debug(`   Input: "${input}"`);
+    this.logger.debug(`   Chat history length: ${chatHistory.length}`);
+    this.logger.debug(`   Timeout: ${timeout}ms`);
+    
+    const executionPromise = executor.invoke({
+      input,
+      chat_history: chatHistory,
+    });
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(`${modelType} model execution timeout after ${timeout}ms`)), timeout)
+    );
+    
+    return Promise.race([executionPromise, timeoutPromise]);
   }
 
   /**

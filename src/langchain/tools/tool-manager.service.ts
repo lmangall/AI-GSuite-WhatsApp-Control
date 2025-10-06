@@ -30,9 +30,11 @@ export class LangChainToolManagerService implements ILangChainToolManager {
    */
   async discoverMCPTools(): Promise<LangChainTool[]> {
     try {
-      this.logger.debug('Discovering MCP tools...');
+      this.logger.log('🔍 Discovering MCP tools...');
       
       const mcpTools = await this.mcpService.listTools();
+      this.logger.log(`📦 Found ${mcpTools.length} MCP tools from MCP service`);
+      
       const discoveryResult: ToolDiscoveryResult = {
         totalFound: mcpTools.length,
         successfulConversions: 0,
@@ -42,16 +44,19 @@ export class LangChainToolManagerService implements ILangChainToolManager {
       };
 
       for (const mcpTool of mcpTools) {
+        this.logger.debug(`🔄 Converting MCP tool: ${mcpTool.name}`);
         const conversionResult = this.convertMCPToolToLangChain(mcpTool);
         
         if (conversionResult.success && conversionResult.tool) {
           discoveryResult.tools.push(conversionResult.tool);
           discoveryResult.successfulConversions++;
           this.tools.set(conversionResult.tool.name, conversionResult.tool);
+          this.logger.debug(`✅ Successfully converted: ${mcpTool.name}`);
         } else {
           discoveryResult.failedConversions++;
           if (conversionResult.error) {
             discoveryResult.errors.push(`${mcpTool.name}: ${conversionResult.error}`);
+            this.logger.warn(`❌ Failed to convert ${mcpTool.name}: ${conversionResult.error}`);
           }
         }
       }
@@ -59,16 +64,16 @@ export class LangChainToolManagerService implements ILangChainToolManager {
       this.lastDiscoveryTime = new Date();
       
       this.logger.log(
-        `MCP tool discovery completed: ${discoveryResult.successfulConversions}/${discoveryResult.totalFound} tools converted successfully`
+        `✅ MCP tool discovery completed: ${discoveryResult.successfulConversions}/${discoveryResult.totalFound} tools converted successfully`
       );
 
       if (discoveryResult.errors.length > 0) {
-        this.logger.warn('Tool conversion errors:', discoveryResult.errors);
+        this.logger.warn(`⚠️  Tool conversion errors (${discoveryResult.errors.length}):`, discoveryResult.errors);
       }
 
       return discoveryResult.tools;
     } catch (error) {
-      this.logger.error('Failed to discover MCP tools:', error);
+      this.logger.error('❌ Failed to discover MCP tools:', error);
       throw new Error(`MCP tool discovery failed: ${error.message}`);
     }
   }
@@ -152,22 +157,36 @@ export class LangChainToolManagerService implements ILangChainToolManager {
     try {
       const allTools: LangChainTool[] = [];
       
+      this.logger.log('🔍 Getting all available tools...');
+      
       // Get MCP tools
+      this.logger.debug('📦 Discovering MCP tools...');
       const mcpTools = await this.discoverMCPTools();
       allTools.push(...mcpTools);
+      this.logger.log(`✅ Loaded ${mcpTools.length} MCP tools`);
       
       // Add Brave Search tool if enabled
       const enabledTools = this.configService.getLangChainConfig().enabledTools;
+      this.logger.debug(`🔧 Enabled tools in config: ${enabledTools.join(', ')}`);
+      
       if (enabledTools.includes('brave_search')) {
+        this.logger.log('🔍 Brave search is enabled, creating tool...');
         const braveSearchTool = this.createBraveSearchTool();
         allTools.push(braveSearchTool);
         this.tools.set(braveSearchTool.name, braveSearchTool);
+        this.logger.log('✅ Brave search tool created and added');
+      } else {
+        this.logger.warn('⚠️  Brave search is NOT enabled in config');
       }
 
-      this.logger.debug(`Total tools available: ${allTools.length}`);
+      this.logger.log(`✅ Total tools available: ${allTools.length}`);
+      allTools.forEach((tool, index) => {
+        this.logger.log(`   ${index + 1}. ${tool.name} (source: ${(tool as any).source || 'unknown'})`);
+      });
+      
       return allTools;
     } catch (error) {
-      this.logger.error('Failed to get all tools:', error);
+      this.logger.error('❌ Failed to get all tools:', error);
       throw new Error(`Failed to get all tools: ${error.message}`);
     }
   }

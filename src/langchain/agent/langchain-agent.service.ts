@@ -88,9 +88,28 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
 
       this.logger.log(`🔧 Creating agent executor with ${tools.length} tools for ${modelType} model`);
 
+      // Get current date/time info for context
+      const now = new Date();
+      const currentDateTime = now.toLocaleString('en-US', { 
+        timeZone: 'Europe/Paris',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const isoDateTime = now.toISOString();
+      
       // Create a simplified ReAct prompt optimized for speed and reliability
       const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are Jarvis, Leo's personal AI assistant. Be casual, helpful, and conversational.
+
+CURRENT CONTEXT:
+- Current date/time: ${currentDateTime} (CEST - Europe/Paris timezone)
+- ISO format: ${isoDateTime}
+- Timezone: Europe/Paris (CEST/CET)
 
 PERSONALITY:
 - Talk like a friend, not a robot
@@ -106,8 +125,12 @@ WHEN TO USE TOOLS:
 
 CRITICAL RULES:
 1. Leo's email: l.mangallon@gmail.com (NEVER ask for this)
-2. For calendar events, use ISO format for dates: "2025-10-07T08:00:00" for 8am on Oct 7, 2025
-3. Calendar ID is always "primary" unless specified
+2. For calendar events:
+   - Use ISO 8601 format: "2025-10-07T08:00:00" for 8am on Oct 7, 2025
+   - Timezone: "Europe/Paris" (CEST/CET)
+   - Calendar ID is always "primary" unless specified
+   - When user says "Tuesday" or "next week", calculate from current date above
+3. NEVER show message IDs or links - only subjects and senders
 
 Available tools: {tools}
 Tool names: {tool_names}

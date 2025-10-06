@@ -417,17 +417,11 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         }
       };
 
-      // Create LangChain tool using DynamicTool with proper schema handling
+      // Create LangChain tool using DynamicTool with simplified approach
       const langChainTool = new DynamicTool({
         name: mcpTool.name || 'unknown_tool',
         description: mcpTool.description || `MCP tool: ${mcpTool.name}`,
-        func: toolFunction,
-        // Add schema if available to help with parameter parsing
-        schema: mcpTool.inputSchema ? {
-          type: 'object',
-          properties: mcpTool.inputSchema.properties || {},
-          required: mcpTool.inputSchema.required || []
-        } : undefined
+        func: toolFunction
       }) as LangChainTool;
 
       // Add additional properties

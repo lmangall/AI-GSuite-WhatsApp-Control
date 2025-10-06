@@ -735,7 +735,7 @@ If no tools needed, skip to Final Answer directly.`],
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
       
       // Call the tool using the proper LangChain tool interface
-      const searchPromise = searchTool.call(searchParams);
+      const searchPromise = searchTool.invoke(searchParams);
       
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Email search timeout')), 10000);
@@ -1095,7 +1095,7 @@ If no tools needed, skip to Final Answer directly.`],
       
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
       
-      const searchResult = await searchTool.call(searchParams);
+      const searchResult = await searchTool.invoke(searchParams);
       
       // Parse and format the results
       if (searchResult && searchResult.includes('No messages found')) {

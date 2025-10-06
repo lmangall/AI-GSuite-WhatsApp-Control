@@ -1057,6 +1057,7 @@ If no tools needed, skip to Final Answer directly.`],
       /^check.*email/i,
       /^show.*email/i,
       /^get.*email/i,
+      /^read.*email/i,
       /^my.*email/i,
       /^email/i,
       /^unread/i

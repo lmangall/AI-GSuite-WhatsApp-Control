@@ -744,6 +744,21 @@ If no tools needed, skip to Final Answer directly.`],
       
       const searchResult = await Promise.race([searchPromise, timeoutPromise]);
       
+      // Check if this is an authentication request
+      if (searchResult && searchResult.includes('ACTION REQUIRED: Google Authentication Needed')) {
+        this.logger.log(`🔐 [${requestId}] Authentication required, forwarding auth link to user`);
+        
+        // Extract the authorization URL from the response
+        const authUrlMatch = searchResult.match(/Authorization URL: (https:\/\/[^\s\n]+)/);
+        if (authUrlMatch && authUrlMatch[1]) {
+          const authUrl = authUrlMatch[1];
+          return `🔐 **Google Authentication Required**\n\nTo access your Gmail, please click this link to authorize:\n\n${authUrl}\n\nAfter authorizing, try your request again!`;
+        }
+        
+        // Fallback if URL extraction fails
+        return `🔐 **Google Authentication Required**\n\nI need permission to access your Gmail. Please check the logs for the authorization link, or try again in a moment.`;
+      }
+      
       // Format response quickly
       if (!searchResult || searchResult.includes('No messages found')) {
         return normalizedMessage.includes('unread') 
@@ -1097,6 +1112,21 @@ If no tools needed, skip to Final Answer directly.`],
       this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
       
       const searchResult = await searchTool.invoke(JSON.stringify(searchParams));
+      
+      // Check if this is an authentication request
+      if (searchResult && searchResult.includes('ACTION REQUIRED: Google Authentication Needed')) {
+        this.logger.log(`🔐 [${requestId}] Authentication required, forwarding auth link to user`);
+        
+        // Extract the authorization URL from the response
+        const authUrlMatch = searchResult.match(/Authorization URL: (https:\/\/[^\s\n]+)/);
+        if (authUrlMatch && authUrlMatch[1]) {
+          const authUrl = authUrlMatch[1];
+          return `🔐 **Google Authentication Required**\n\nTo access your Gmail, please click this link to authorize:\n\n${authUrl}\n\nAfter authorizing, try your request again!`;
+        }
+        
+        // Fallback if URL extraction fails
+        return `🔐 **Google Authentication Required**\n\nI need permission to access your Gmail. Please check the logs for the authorization link, or try again in a moment.`;
+      }
       
       // Parse and format the results
       if (searchResult && searchResult.includes('No messages found')) {

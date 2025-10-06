@@ -77,9 +77,36 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       // For now, create with empty tools array - will be populated in later tasks
       const tools: Tool[] = [];
 
-      // Create a basic prompt template
+      // Create a ReAct prompt template with required variables
       const prompt = ChatPromptTemplate.fromMessages([
-        ['system', 'You are a helpful AI assistant integrated with WhatsApp. Respond naturally and helpfully to user messages.'],
+        [
+          'system',
+          `You are a helpful AI assistant integrated with WhatsApp. Respond naturally and helpfully to user messages.
+
+TOOLS:
+------
+You have access to the following tools:
+
+{tools}
+
+To use a tool, please use the following format:
+
+\`\`\`
+Thought: Do I need to use a tool? Yes
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+\`\`\`
+
+When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
+
+\`\`\`
+Thought: Do I need to use a tool? No
+Final Answer: [your response here]
+\`\`\`
+
+Begin!`
+        ],
         new MessagesPlaceholder('chat_history'),
         ['human', '{input}'],
         new MessagesPlaceholder('agent_scratchpad'),

@@ -51,15 +51,17 @@ export class EmailHandlerService {
         return { emails: [] };
       }
 
-      this.logger.log(`Found ${messageIds.length} message IDs, fetching content...`);
+      this.logger.log(`Found ${messageIds.length} message IDs: ${messageIds.join(', ')}`);
 
       // Step 2: Get email content for these IDs
       const contentResult = await this.googleWorkspaceService.callTool('get_gmail_messages_content_batch', {
         message_ids: messageIds,
         user_google_email: userEmail,
+        format: 'metadata', // Only get metadata (subject, from, etc.) not full body
       });
 
-      this.logger.debug(`Content result:`, contentResult);
+      this.logger.log(`Content result type: ${typeof contentResult}`);
+      this.logger.log(`Content result preview: ${JSON.stringify(contentResult).substring(0, 1000)}...`);
 
       // Step 3: Parse and format emails
       const emails = this.parseEmailContent(contentResult);
@@ -84,11 +86,11 @@ export class EmailHandlerService {
       return "No emails found! 📭";
     }
 
-    const formatted = emails.map((email, index) => {
+    const formatted = emails.map((email) => {
       return `${email.subject} - from ${email.sender}`;
     });
 
-    return formatted.join('\n');
+    return formatted.join('\n\n'); // Double newline for better WhatsApp formatting
   }
 
   /**
@@ -168,12 +170,21 @@ export class EmailHandlerService {
         resultText = JSON.stringify(result);
       }
 
-      this.logger.debug(`Parsing email content from: ${resultText.substring(0, 500)}...`);
+      this.logger.log(`Parsing email content, text length: ${resultText.length}`);
+      this.logger.debug(`First 1000 chars: ${resultText.substring(0, 1000)}`);
 
       const emails: EmailSummary[] = [];
       
-      // Split by message blocks
-      const messageBlocks = resultText.split(/Message \d+:/);
+      // Split by message blocks - try different patterns
+      let messageBlocks = resultText.split(/Message \d+:/);
+      
+      // If that didn't work, try splitting by "---" or other separators
+      if (messageBlocks.length <= 1) {
+        this.logger.debug('Trying alternative split pattern...');
+        messageBlocks = resultText.split(/\n\n---\n\n|\n={3,}\n/);
+      }
+      
+      this.logger.log(`Found ${messageBlocks.length} message blocks`);
       
       for (const block of messageBlocks) {
         if (!block.trim()) continue;

@@ -13,6 +13,7 @@ import { BaseAgentService } from '../../agent/base-agent.service';
 import { LangChainConfigService } from '../config/langchain-config.service';
 import { LangChainToolManagerService } from '../tools/tool-manager.service';
 import { GreetingResponseService } from '../responses/greeting-response.service';
+import { EmailHandlerService } from '../services/email-handler.service';
 import { LangChainConfig, MessageContext, ConversationMessage } from '../interfaces/langchain-config.interface';
 
 interface LangChainConversationMessage extends ConversationMessage {
@@ -36,6 +37,7 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
     private langChainConfigService: LangChainConfigService,
     private toolManager: LangChainToolManagerService,
     private greetingService: GreetingResponseService,
+    private emailHandler: EmailHandlerService,
   ) {
     super(configService);
     this.config = this.langChainConfigService.getLangChainConfig();
@@ -258,6 +260,29 @@ CRITICAL:
         });
 
         return fastResponse;
+      }
+
+      // Fast-path for email requests - use dedicated email handler
+      if (this.isEmailRequest(userMessage)) {
+        this.logger.log(`📧 [${requestId}] Email request detected, using dedicated handler`);
+        const emailResponse = await this.handleEmailRequest(userMessage, userId, requestId);
+        
+        const duration = Date.now() - startTime;
+        this.logger.log(`⚡ [${requestId}] Email request completed in ${duration}ms`);
+
+        // Add to history
+        this.addToHistory(userId, {
+          role: 'user',
+          content: userMessage,
+          timestamp: new Date(),
+        });
+        this.addToHistory(userId, {
+          role: 'assistant',
+          content: emailResponse,
+          timestamp: new Date(),
+        });
+
+        return emailResponse;
       }
 
       // DISABLED: Optimized email processing - needs proper implementation with batch content fetching
@@ -823,6 +848,69 @@ CRITICAL:
     // Fallback: count message indicators
     const messageIndicators = searchResult.match(/Message ID:/g);
     return messageIndicators ? messageIndicators.length : 0;
+  }
+
+  /**
+   * Check if message is an email request
+   */
+  private isEmailRequest(message: string): boolean {
+    const normalized = message.toLowerCase().trim();
+    const emailPatterns = [
+      /^check.*email/i,
+      /^show.*email/i,
+      /^get.*email/i,
+      /^read.*email/i,
+      /^my.*email/i,
+      /^email/i,
+      /^unread/i,
+      /^inbox/i,
+      /check.*unread/i,
+      /unread.*email/i,
+      /email.*unread/i,
+    ];
+
+    return emailPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  /**
+   * Handle email request directly with dedicated service
+   */
+  private async handleEmailRequest(message: string, userId: string, requestId: string): Promise<string> {
+    try {
+      const normalized = message.toLowerCase();
+      const unreadOnly = normalized.includes('unread');
+
+      this.logger.log(`📧 [${requestId}] Fetching ${unreadOnly ? 'unread' : 'recent'} emails`);
+
+      const result = await this.emailHandler.getRecentEmails({
+        unreadOnly,
+        maxResults: 10,
+        userEmail: 'l.mangallon@gmail.com',
+      });
+
+      // Check for errors (like auth required)
+      if (result.error) {
+        return result.error;
+      }
+
+      // Format and return emails
+      if (result.emails.length === 0) {
+        return unreadOnly 
+          ? "No unread emails! 📭 You're all caught up! 🎉"
+          : "No emails found! 📭";
+      }
+
+      const formatted = this.emailHandler.formatEmailsForDisplay(result.emails);
+      const prefix = unreadOnly 
+        ? `You have ${result.emails.length} unread email${result.emails.length !== 1 ? 's' : ''}:\n\n`
+        : `Here are your recent emails (${result.emails.length}):\n\n`;
+
+      return prefix + formatted;
+
+    } catch (error) {
+      this.logger.error(`❌ [${requestId}] Email request failed:`, error);
+      return `Sorry, I couldn't retrieve your emails right now. ${error.message}`;
+    }
   }
 
   /**

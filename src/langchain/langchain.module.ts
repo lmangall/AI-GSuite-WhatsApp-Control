@@ -20,6 +20,7 @@ import { ResultFormatterService } from './formatters/result-formatter.service';
 import { GreetingResponseService } from './responses/greeting-response.service';
 import { FastIntentRouterService } from './intent/fast-intent-router.service';
 import { LangChainRouterService } from './langchain-router.service';
+import { EmailHandlerService } from './services/email-handler.service';
 
 @Module({
     imports: [ConfigModule, GoogleWorkspaceModule, BraveModule],
@@ -42,6 +43,7 @@ import { LangChainRouterService } from './langchain-router.service';
         GreetingResponseService,
         FastIntentRouterService,
         LangChainRouterService,
+        EmailHandlerService,
     ],
     exports: [
         LangChainConfigService,

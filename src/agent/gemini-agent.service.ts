@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, Content, FunctionDeclaration, Tool as GeminiTool, SchemaType } from '@google/generative-ai';
-import { MCPService } from '../mcp/mcp.service';
+import { GoogleWorkspaceMCPService } from '../mcp/google-workspace-mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { IAgentService } from './agent.interface';
 import { SYSTEM_PROMPT } from './agent.prompts';
@@ -15,7 +15,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
 
   constructor(
     configService: ConfigService,
-    private mcpService: MCPService,
+    private googleWorkspaceService: GoogleWorkspaceMCPService,
   ) {
     super(configService);
   }
@@ -102,7 +102,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
     try {
       this.logger.log(`[${requestId}] 🤖 Processing message with Gemini for user: ${userId}`);
 
-      const mcpTools = await this.mcpService.listTools();
+      const mcpTools = await this.googleWorkspaceService.listTools();
       this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
 
       const geminiTools = this.convertMCPToolsToGemini(mcpTools);
@@ -136,7 +136,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
             this.logger.log(`[${requestId}] 📝 Arguments: ${JSON.stringify(call.args)}`);
 
             try {
-              const toolResult = await this.mcpService.callTool(call.name, call.args);
+              const toolResult = await this.googleWorkspaceService.callTool(call.name, call.args);
 
               this.logger.log(`[${requestId}] ✅ Tool ${call.name} executed successfully`);
               this.logger.log(`[${requestId}] 📊 Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);

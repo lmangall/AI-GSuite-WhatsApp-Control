@@ -45,8 +45,8 @@ export class LangChainConfigService {
     return this.configService.get<string>('BRAVE_SEARCH_API_KEY', '');
   }
 
-  getMCPServerUrl(): string {
-    return this.configService.get<string>('MCP_SERVER_URL', '');
+  getGoogleWorkspaceMCPServerUrl(): string {
+    return this.configService.get<string>('GOOGLE_WORKSPACE_MCP_SERVER_URL', '');
   }
 
   // Memory-specific configuration getters

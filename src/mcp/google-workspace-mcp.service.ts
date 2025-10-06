@@ -11,18 +11,23 @@ import {
 
 type ToolResponse = any;
 
+/**
+ * Google Workspace MCP Service
+ * Provides AI control over Gmail, Google Calendar, Docs, Sheets, Slides, 
+ * Chat, Forms, Tasks, Search & Drive through MCP protocol
+ */
 @Injectable()
-export class MCPService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(MCPService.name);
+export class GoogleWorkspaceMCPService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(GoogleWorkspaceMCPService.name);
   private client: Client;
   private transport: StreamableHTTPClientTransport;
   private serverUrl: string;
   private sessionId?: string;
 
   constructor(private configService: ConfigService) {
-    this.serverUrl = this.configService.get<string>('MCP_SERVER_URL');
+    this.serverUrl = this.configService.get<string>('GOOGLE_WORKSPACE_MCP_SERVER_URL');
     if (!this.serverUrl) {
-      throw new Error('MCP_SERVER_URL is not defined in environment variables');
+      throw new Error('GOOGLE_WORKSPACE_MCP_SERVER_URL is not defined in environment variables');
     }
   }
 
@@ -39,7 +44,7 @@ export class MCPService implements OnModuleInit, OnModuleDestroy {
 
     try {
       this.client = new Client(
-        { name: 'nestjs-whatsapp-client', version: '1.0.0' },
+        { name: 'google-workspace-mcp-client', version: '1.0.0' },
         { capabilities: { elicitation: {} } }
       );
 

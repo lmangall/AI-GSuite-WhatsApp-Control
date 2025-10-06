@@ -47,7 +47,7 @@ Copy `config/langchain.example.env` to `.env` and configure the following:
 #### Tool Configuration
 - `LANGCHAIN_ENABLED_TOOLS=mcp,brave_search` - Enabled tools
 - `LANGCHAIN_TOOL_TIMEOUT=30000` - Tool execution timeout
-- `MCP_SERVER_URL=http://localhost:3001` - MCP server URL
+- `GOOGLE_WORKSPACE_MCP_SERVER_URL=http://localhost:3001` - Google Workspace MCP server URL
 
 ### Prompt Configuration
 

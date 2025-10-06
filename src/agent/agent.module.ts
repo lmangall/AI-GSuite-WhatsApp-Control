@@ -2,13 +2,13 @@ import { Module } from '@nestjs/common';
 import { GeminiAgentService } from './gemini-agent.service';
 import { OpenAIAgentService } from './openai-agent.service';
 import { AgentFactoryService } from './agent-factory.service';
-import { MCPModule } from '../mcp/mcp.module';
+import { GoogleWorkspaceModule } from '../mcp/google-workspace.module';
 import { LangChainModule } from '../langchain/langchain.module';
 
 const AGENT_SERVICE = 'AGENT_SERVICE';
 
 @Module({
-  imports: [MCPModule, LangChainModule],
+  imports: [GoogleWorkspaceModule, LangChainModule],
   providers: [
     GeminiAgentService,
     OpenAIAgentService,

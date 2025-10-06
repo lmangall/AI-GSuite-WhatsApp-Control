@@ -14,11 +14,11 @@ import { LangChainMonitoringService } from './monitoring/langchain-monitoring.se
 import { LangChainCircuitBreakerService } from './circuit-breaker/circuit-breaker.service';
 import { StructuredLoggerService } from './logging/structured-logger.service';
 import { StartupValidationService } from './startup/startup-validation.service';
-import { MCPModule } from '../mcp/mcp.module';
+import { GoogleWorkspaceModule } from '../mcp/google-workspace.module';
 import { BraveModule } from '../webSearch/brave.module';
 
 @Module({
-    imports: [ConfigModule, MCPModule, BraveModule],
+    imports: [ConfigModule, GoogleWorkspaceModule, BraveModule],
     providers: [
         LangChainConfigService,
         IntentConfigService,

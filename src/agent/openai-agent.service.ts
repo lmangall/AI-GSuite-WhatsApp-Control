@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import { MCPService } from '../mcp/mcp.service';
+import { GoogleWorkspaceMCPService } from '../mcp/google-workspace-mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { IAgentService } from './agent.interface';
 import { SYSTEM_PROMPT } from './agent.prompts';
@@ -14,7 +14,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
 
   constructor(
     configService: ConfigService,
-    private mcpService: MCPService,
+    private googleWorkspaceService: GoogleWorkspaceMCPService,
   ) {
     super(configService);
   }
@@ -81,7 +81,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
     try {
       this.logger.log(`[${requestId}] 🤖 Processing with OpenAI for user: ${userId}`);
 
-      const mcpTools = await this.mcpService.listTools();
+      const mcpTools = await this.googleWorkspaceService.listTools();
       this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
 
       const openAITools = this.convertMCPToolsToOpenAI(mcpTools);
@@ -120,7 +120,7 @@ export class OpenAIAgentService extends BaseAgentService<OpenAI.Chat.ChatComplet
 
             try {
               const args = JSON.parse(toolCall.function.arguments);
-              const toolResult = await this.mcpService.callTool(toolCall.function.name, args);
+              const toolResult = await this.googleWorkspaceService.callTool(toolCall.function.name, args);
 
               this.logger.log(`[${requestId}] ✅ Tool ${toolCall.function.name} executed successfully`);
               this.logger.log(`[${requestId}] 📊 Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);

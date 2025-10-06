@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DynamicTool } from '@langchain/core/tools';
 import { Tool as MCPTool } from '@modelcontextprotocol/sdk/types.js';
-import { MCPService } from '../../mcp/mcp.service';
+import { GoogleWorkspaceMCPService } from '../../mcp/google-workspace-mcp.service';
 import { BraveService } from '../../webSearch/brave.service';
 import { LangChainConfigService } from '../config/langchain-config.service';
 import { 
@@ -20,7 +20,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
   private lastDiscoveryTime?: Date;
 
   constructor(
-    private readonly mcpService: MCPService,
+    private readonly googleWorkspaceService: GoogleWorkspaceMCPService,
     private readonly braveService: BraveService,
     private readonly configService: LangChainConfigService
   ) {}
@@ -32,7 +32,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
     try {
       this.logger.log('🔍 Discovering MCP tools...');
       
-      const mcpTools = await this.mcpService.listTools();
+      const mcpTools = await this.googleWorkspaceService.listTools();
       this.logger.log(`📦 Found ${mcpTools.length} MCP tools from MCP service`);
       
       const discoveryResult: ToolDiscoveryResult = {
@@ -288,7 +288,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
 
             this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { args: parsedArgs });
             
-            const result = await this.mcpService.callTool(mcpTool.name!, parsedArgs);
+            const result = await this.googleWorkspaceService.callTool(mcpTool.name!, parsedArgs);
             
             // Format result as string for LangChain
             if (typeof result === 'string') {

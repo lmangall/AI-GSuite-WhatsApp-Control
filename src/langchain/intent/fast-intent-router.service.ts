@@ -115,6 +115,46 @@ export class FastIntentRouterService {
       };
     }
     
+    // Check for simple email requests that need tools but can be handled quickly
+    const emailPatterns = [
+      /^check.*email/i,
+      /^show.*email/i,
+      /^get.*email/i,
+      /^my.*email/i,
+      /^email/i,
+      /^unread/i,
+      /^inbox/i
+    ];
+    
+    if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {
+      this.logger.debug(`📧 Fast route: Email request detected for "${message}" - will use optimized agent flow`);
+      return {
+        shouldUseFastPath: false, // Still needs agent but with email optimization
+        intent: 'complex'
+      };
+    }
+
+    // Check for simple status/confirmation requests
+    const statusPatterns = [
+      /^(yes|yep|yeah|sure|do it|go ahead|proceed)!?$/i,
+      /^(no|nope|cancel|stop|don't)!?$/i
+    ];
+    
+    if (statusPatterns.some(pattern => pattern.test(normalizedMessage))) {
+      this.logger.debug(`⚡ Fast route: Status confirmation detected for "${message}"`);
+      
+      const isPositive = /^(yes|yep|yeah|sure|do it|go ahead|proceed)!?$/i.test(normalizedMessage);
+      const response = isPositive 
+        ? "Got it! 👍" 
+        : "No problem! 👌";
+      
+      return {
+        shouldUseFastPath: true,
+        response,
+        intent: 'thanks'
+      };
+    }
+
     // No fast path available - needs complex processing
     this.logger.debug(`🔄 Complex route: Message "${message}" requires full agent processing`);
     return {

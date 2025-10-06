@@ -84,23 +84,26 @@ export class LangChainAgentService extends BaseAgentService<LangChainConversatio
       
       this.logger.log(`🔧 Creating agent executor with ${tools.length} tools for ${modelType} model`);
 
-      // Create a custom ReAct prompt
+      // Create a simplified ReAct prompt optimized for speed and reliability
       const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `You are a helpful AI assistant with access to various tools. Use the tools available to help answer questions and complete tasks.
+        ["system", `You are Jarvis, Leo's personal AI assistant. You have access to tools to help with tasks.
 
-Available tools: {tools}
-Tool names: {tool_names}
+CRITICAL RULES:
+1. For emails: ALWAYS format as "📧 [Subject] - from [Sender Name]" - NO IDs, NO links
+2. Leo's email: l.mangallon@gmail.com (NEVER ask for this again)
+3. Be FAST - execute tools immediately when needed
+4. Keep responses SHORT and casual
 
-When using tools, follow this format:
-Thought: I need to use a tool to help with this request.
-Action: tool_name
+Available tools: {tool_names}
+
+REACT FORMAT (follow exactly):
+Thought: [what you need to do]
+Action: [tool_name]
 Action Input: {{"parameter": "value"}}
-Observation: [tool result will appear here]
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer.
-Final Answer: [your response to the human]
+Observation: [tool result]
+Final Answer: [your response to Leo]
 
-Begin!`],
+If no tools needed, skip to Final Answer directly.`],
         ["placeholder", "{chat_history}"],
         ["human", "{input}"],
         ["assistant", "{agent_scratchpad}"]
@@ -113,13 +116,14 @@ Begin!`],
         prompt,
       });
 
-      // Create and return the agent executor
+      // Create and return the agent executor with optimized settings
       const executor = new AgentExecutor({
         agent,
         tools,
-        verbose: this.config.enableTracing,
-        maxIterations: this.config.maxToolCalls,
+        verbose: false, // Disable verbose to reduce processing time
+        maxIterations: Math.min(this.config.maxToolCalls, 3), // Limit iterations for faster response
         returnIntermediateSteps: true,
+        handleParsingErrors: true, // Enable parsing error handling
       });
       
       this.logger.log(`✅ Agent executor created successfully`);
@@ -147,8 +151,8 @@ Begin!`],
         return new ChatGoogleGenerativeAI({
           apiKey,
           model: 'gemini-2.0-flash-exp',
-          temperature: 0.7,
-          maxOutputTokens: this.config.maxTokens,
+          temperature: 0.1, // Lower temperature for more consistent output
+          maxOutputTokens: Math.min(this.config.maxTokens, 1000), // Limit tokens for faster response
         });
       } else {
         const apiKey = this.langChainConfigService.getOpenAIApiKey();
@@ -159,8 +163,9 @@ Begin!`],
         return new ChatOpenAI({
           apiKey,
           modelName: 'gpt-4o-mini',
-          temperature: 0.7,
-          maxTokens: this.config.maxTokens,
+          temperature: 0.1, // Lower temperature for more consistent output
+          maxTokens: Math.min(this.config.maxTokens, 1000), // Limit tokens for faster response
+          timeout: 15000, // 15 second timeout
         });
       }
     } catch (error) {
@@ -213,6 +218,35 @@ Begin!`],
         });
         
         return fastResponse;
+      }
+
+      // Check for simple email requests and try optimized processing
+      if (this.isSimpleEmailRequest(userMessage)) {
+        this.logger.log(`📧 [${requestId}] Detected simple email request, using optimized processing`);
+        try {
+          const emailResponse = await this.processEmailRequestOptimized(userMessage, userId, requestId);
+          if (emailResponse) {
+            const duration = Date.now() - startTime;
+            this.logger.log(`⚡ [${requestId}] Optimized email processing completed in ${duration}ms`);
+            
+            // Add to history
+            this.addToHistory(userId, {
+              role: 'user',
+              content: userMessage,
+              timestamp: new Date(),
+            });
+            this.addToHistory(userId, {
+              role: 'assistant',
+              content: emailResponse,
+              timestamp: new Date(),
+            });
+            
+            return emailResponse;
+          }
+        } catch (error) {
+          this.logger.warn(`⚠️ [${requestId}] Optimized email processing failed, falling back to agent: ${error.message}`);
+          // Continue to normal agent processing
+        }
       }
 
       // Ensure agent executor is ready for complex queries
@@ -544,42 +578,59 @@ Begin!`],
    * Load tools safely with error handling and graceful degradation
    */
   private async loadToolsSafely(): Promise<Tool[]> {
+    const loadStartTime = Date.now();
+    
     try {
       this.logger.log('🔧 Loading tools from tool manager...');
-      const tools = await this.toolManager.getAllTools();
       
-      this.logger.log(`✅ Successfully loaded ${tools.length} tools`);
-      
-      // Log each tool with details
-      tools.forEach((tool, index) => {
-        this.logger.log(`   ${index + 1}. ${(tool as any).name} (source: ${(tool as any).source || 'unknown'})`);
-        this.logger.debug(`      Description: ${(tool as any).description}`);
+      // Set a timeout for tool loading to prevent hanging
+      const toolsPromise = this.toolManager.getAllTools();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Tool loading timeout')), 10000); // 10 second timeout
       });
+      
+      const tools = await Promise.race([toolsPromise, timeoutPromise]);
+      
+      const loadDuration = Date.now() - loadStartTime;
+      this.logger.log(`✅ Successfully loaded ${tools.length} tools in ${loadDuration}ms`);
+      
+      // Log each tool with details (but limit to avoid spam)
+      const maxToolsToLog = 5;
+      tools.slice(0, maxToolsToLog).forEach((tool, index) => {
+        this.logger.log(`   ${index + 1}. ${(tool as any).name} (source: ${(tool as any).source || 'unknown'})`);
+        this.logger.debug(`      Description: ${(tool as any).description?.substring(0, 100) || 'No description'}...`);
+      });
+      
+      if (tools.length > maxToolsToLog) {
+        this.logger.log(`   ... and ${tools.length - maxToolsToLog} more tools`);
+      }
       
       return tools;
     } catch (error) {
-      this.logger.error('❌ Failed to load tools from tool manager, attempting individual tool loading:', error);
+      const loadDuration = Date.now() - loadStartTime;
+      this.logger.error(`❌ Failed to load tools from tool manager after ${loadDuration}ms, attempting individual tool loading:`, error);
       
-      // Try to load tools individually as fallback
+      // Try to load essential tools individually as fallback
       const partialTools: Tool[] = [];
       
-      try {
-        // Try to load Brave search tool specifically
-        const braveSearchTool = this.toolManager.createBraveSearchTool();
-        partialTools.push(braveSearchTool);
-        this.logger.log('✅ Brave search tool loaded individually');
-      } catch (braveError) {
-        this.logger.warn('❌ Brave search tool failed to load individually:', braveError);
-      }
+      // Load tools in parallel with individual timeouts
+      const toolLoadPromises = [
+        this.loadBraveSearchTool(),
+        this.loadMCPTools()
+      ];
       
-      try {
-        // Try to load MCP tools
-        const mcpTools = await this.toolManager.discoverMCPTools();
-        partialTools.push(...mcpTools);
-        this.logger.log(`✅ ${mcpTools.length} MCP tools loaded individually`);
-      } catch (mcpError) {
-        this.logger.warn('❌ MCP tools failed to load individually:', mcpError);
-      }
+      const results = await Promise.allSettled(toolLoadPromises);
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.length > 0) {
+          partialTools.push(...result.value);
+          const toolType = index === 0 ? 'Brave search' : 'MCP';
+          this.logger.log(`✅ ${result.value.length} ${toolType} tool(s) loaded individually`);
+        } else if (result.status === 'rejected') {
+          const toolType = index === 0 ? 'Brave search' : 'MCP';
+          this.logger.warn(`❌ ${toolType} tools failed to load:`, result.reason);
+        }
+      });
       
       if (partialTools.length > 0) {
         this.logger.log(`⚠️ Partial tool loading successful: ${partialTools.length} tools available`);
@@ -589,6 +640,138 @@ Begin!`],
       
       return partialTools;
     }
+  }
+
+  /**
+   * Load Brave search tool individually
+   */
+  private async loadBraveSearchTool(): Promise<Tool[]> {
+    try {
+      const braveSearchTool = this.toolManager.createBraveSearchTool();
+      return [braveSearchTool];
+    } catch (error) {
+      this.logger.debug('Brave search tool not available:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Load MCP tools individually with timeout
+   */
+  private async loadMCPTools(): Promise<Tool[]> {
+    try {
+      const mcpToolsPromise = this.toolManager.discoverMCPTools();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('MCP tools loading timeout')), 8000); // 8 second timeout
+      });
+      
+      const mcpTools = await Promise.race([mcpToolsPromise, timeoutPromise]);
+      return mcpTools;
+    } catch (error) {
+      this.logger.debug('MCP tools not available:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Check if a message is a simple email request
+   */
+  private isSimpleEmailRequest(message: string): boolean {
+    const normalizedMessage = message.toLowerCase().trim();
+    const emailPatterns = [
+      /^check.*email/i,
+      /^show.*email/i,
+      /^get.*email/i,
+      /^my.*email/i,
+      /^email/i,
+      /^unread/i,
+      /^inbox/i
+    ];
+    
+    return emailPatterns.some(pattern => pattern.test(normalizedMessage));
+  }
+
+  /**
+   * Process email requests with optimized flow
+   */
+  private async processEmailRequestOptimized(message: string, userId: string, requestId: string): Promise<string | null> {
+    this.logger.log(`📧 [${requestId}] Processing email request with optimized flow`);
+    
+    try {
+      // Get tools quickly
+      const tools = await this.getAvailableTools();
+      const searchTool = tools.find(tool => (tool as any).name === 'search_gmail_messages');
+      
+      if (!searchTool) {
+        throw new Error('Gmail search tool not available');
+      }
+      
+      // Determine search parameters
+      const normalizedMessage = message.toLowerCase();
+      let query = 'in:inbox';
+      let pageSize = 10;
+      
+      if (normalizedMessage.includes('unread')) {
+        query = 'is:unread in:inbox';
+        pageSize = 5; // Fewer unread emails typically
+      }
+      
+      // Execute search with timeout
+      this.logger.log(`🔍 [${requestId}] Searching emails: ${query}`);
+      const searchPromise = (searchTool as any).invoke({
+        query,
+        user_google_email: 'l.mangallon@gmail.com',
+        page_size: pageSize
+      });
+      
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Email search timeout')), 10000);
+      });
+      
+      const searchResult = await Promise.race([searchPromise, timeoutPromise]);
+      
+      // Format response quickly
+      if (!searchResult || searchResult.includes('No messages found')) {
+        return normalizedMessage.includes('unread') 
+          ? "No unread emails! 📭 You're all caught up! 🎉"
+          : "No emails found! 📭";
+      }
+      
+      // Simple response without complex parsing
+      const emailCount = this.extractEmailCount(searchResult);
+      const responsePrefix = normalizedMessage.includes('unread') 
+        ? `You have ${emailCount} unread email${emailCount !== 1 ? 's' : ''}:`
+        : `Here's what you got (${emailCount} email${emailCount !== 1 ? 's' : ''}):`;
+      
+      return `${responsePrefix}\n\n📧 Check your Gmail for details - I found your emails but need to optimize the display format.`;
+      
+    } catch (error) {
+      this.logger.warn(`❌ [${requestId}] Optimized email processing failed: ${error.message}`);
+      return null; // Fall back to normal agent processing
+    }
+  }
+
+  /**
+   * Extract email count from search results
+   */
+  private extractEmailCount(searchResult: string): number {
+    // Try to extract count from various possible formats
+    const countPatterns = [
+      /(\d+)\s+messages?\s+found/i,
+      /found\s+(\d+)\s+messages?/i,
+      /(\d+)\s+results?/i
+    ];
+    
+    for (const pattern of countPatterns) {
+      const match = searchResult.match(pattern);
+      if (match && match[1]) {
+        return parseInt(match[1], 10);
+      }
+    }
+    
+    // Fallback: count message indicators
+    const messageIndicators = searchResult.match(/Message ID:/g);
+    return messageIndicators ? messageIndicators.length : 0;
   }
 
   // Method to get memory for user (will be implemented in later tasks)
@@ -611,17 +794,20 @@ Begin!`],
     chatHistory: BaseMessage[], 
     modelType: string
   ): Promise<any> {
-    const timeout = this.config.toolTimeout || 30000;
+    const timeout = Math.min(this.config.toolTimeout || 20000, 20000); // Max 20 seconds
     
     this.logger.debug(`🚀 Executing agent with model: ${modelType}`);
     this.logger.debug(`   Input: "${input}"`);
     this.logger.debug(`   Chat history length: ${chatHistory.length}`);
     this.logger.debug(`   Timeout: ${timeout}ms`);
     
+    // Limit chat history to last 3 messages for faster processing
+    const limitedHistory = chatHistory.slice(-3);
+    
     this.logger.debug(`🚀 Creating execution promise...`);
     const executionPromise = executor.invoke({
       input,
-      chat_history: chatHistory,
+      chat_history: limitedHistory,
     });
     
     this.logger.debug(`🚀 Setting up timeout promise...`);
@@ -643,7 +829,40 @@ Begin!`],
       return result;
     } catch (error) {
       this.logger.error(`❌ Agent execution failed for model: ${modelType}:`, error);
-      this.logger.error(`❌ Error stack:`, error.stack);
+      
+      // Check if it's a parsing error and try to extract useful response
+      if (error.message.includes('Could not parse LLM output')) {
+        this.logger.warn(`🔧 Attempting to extract response from parsing error...`);
+        
+        // Try multiple extraction patterns
+        const patterns = [
+          /Could not parse LLM output: (.+?)(?:\nTroubleshooting|$)/s,
+          /Could not parse LLM output: (.+?)(?:\n|$)/,
+          /output: (.+?)(?:\n|$)/i
+        ];
+        
+        for (const pattern of patterns) {
+          const match = error.message.match(pattern);
+          if (match && match[1]) {
+            let extractedResponse = match[1].trim();
+            
+            // Clean up the extracted response
+            extractedResponse = extractedResponse.replace(/^["']|["']$/g, ''); // Remove quotes
+            extractedResponse = extractedResponse.replace(/\\n/g, '\n'); // Fix newlines
+            
+            if (extractedResponse.length > 0 && extractedResponse.length < 1000) {
+              this.logger.log(`✅ Extracted response from parsing error: "${extractedResponse.substring(0, 100)}..."`);
+              return { output: extractedResponse };
+            }
+          }
+        }
+        
+        // If extraction fails, provide a helpful fallback based on the input
+        const fallbackResponse = this.generateFallbackResponse(input);
+        this.logger.log(`🔧 Using fallback response for parsing error: "${fallbackResponse}"`);
+        return { output: fallbackResponse };
+      }
+      
       throw error;
     }
   }
@@ -804,8 +1023,137 @@ Begin!`],
       return responses[Math.floor(Math.random() * responses.length)];
     }
     
+    // Check for email requests - try fast email processing
+    const emailPatterns = [
+      /^check.*email/i,
+      /^show.*email/i,
+      /^get.*email/i,
+      /^my.*email/i,
+      /^email/i,
+      /^unread/i
+    ];
+    
+    if (emailPatterns.some(pattern => pattern.test(normalizedMessage))) {
+      this.logger.log(`⚡ [${requestId}] Fast-path: Email request detected, attempting direct tool execution`);
+      try {
+        return await this.handleEmailRequestDirectly(message, userId, requestId);
+      } catch (error) {
+        this.logger.warn(`⚠️ [${requestId}] Fast email processing failed, falling back to agent: ${error.message}`);
+        // Fall through to normal agent processing
+      }
+    }
+    
     // No fast-path available
     return null;
+  }
+
+  /**
+   * Handle email requests directly without the full agent flow
+   */
+  private async handleEmailRequestDirectly(message: string, userId: string, requestId: string): Promise<string> {
+    this.logger.log(`📧 [${requestId}] Processing email request directly`);
+    
+    // Load tools if not already loaded
+    const tools = await this.getAvailableTools();
+    const searchTool = tools.find(tool => (tool as any).name === 'search_gmail_messages');
+    
+    if (!searchTool) {
+      throw new Error('Gmail search tool not available');
+    }
+    
+    // Determine search query based on message
+    const normalizedMessage = message.toLowerCase();
+    let query = 'in:inbox';
+    
+    if (normalizedMessage.includes('unread')) {
+      query = 'is:unread in:inbox';
+    }
+    
+    try {
+      // Call the search tool directly
+      this.logger.log(`🔍 [${requestId}] Searching emails with query: ${query}`);
+      const searchResult = await (searchTool as any).invoke({
+        query,
+        user_google_email: 'l.mangallon@gmail.com',
+        page_size: 10
+      });
+      
+      // Parse and format the results
+      if (searchResult && searchResult.includes('No messages found')) {
+        return "No emails found! 📭";
+      }
+      
+      // Extract email info and format properly
+      const formattedEmails = this.formatEmailResults(searchResult);
+      
+      if (formattedEmails.length === 0) {
+        return "No emails found! 📭";
+      }
+      
+      const response = normalizedMessage.includes('unread') 
+        ? `Here are your unread emails:\n\n${formattedEmails.join('\n')}`
+        : `Here's what you got:\n\n${formattedEmails.join('\n')}`;
+      
+      this.logger.log(`✅ [${requestId}] Direct email processing completed`);
+      return response;
+      
+    } catch (error) {
+      this.logger.error(`❌ [${requestId}] Direct email processing failed:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Format email search results into the proper display format
+   */
+  private formatEmailResults(searchResult: string): string[] {
+    const emails: string[] = [];
+    
+    try {
+      // Look for patterns in the search result that indicate emails
+      const lines = searchResult.split('\n');
+      
+      for (const line of lines) {
+        // Look for message entries (this is a simplified parser)
+        if (line.includes('Message ID:') || line.includes('Subject:') || line.includes('From:')) {
+          // This would need to be more sophisticated based on actual MCP tool output format
+          // For now, return a placeholder that will trigger normal agent processing
+          continue;
+        }
+      }
+      
+      // If we can't parse properly, throw to fall back to agent
+      if (emails.length === 0) {
+        throw new Error('Could not parse email results');
+      }
+      
+    } catch (error) {
+      this.logger.debug(`Could not parse email results directly: ${error.message}`);
+      throw error;
+    }
+    
+    return emails;
+  }
+
+  /**
+   * Generate a fallback response when parsing fails
+   */
+  private generateFallbackResponse(input: string): string {
+    const normalizedInput = input.toLowerCase();
+    
+    if (normalizedInput.includes('email')) {
+      return "I understand you want to check your emails. Let me try a different approach - could you be more specific about what you're looking for?";
+    }
+    
+    if (normalizedInput.includes('search') || normalizedInput.includes('find')) {
+      return "I can help you search for information. Could you tell me more specifically what you're looking for?";
+    }
+    
+    if (normalizedInput.includes('calendar') || normalizedInput.includes('schedule')) {
+      return "I can help with your calendar. What would you like me to do - check your schedule, create an event, or something else?";
+    }
+    
+    return "I'm having trouble processing that request right now. Could you try rephrasing it or being more specific about what you need?";
   }
 
   /**

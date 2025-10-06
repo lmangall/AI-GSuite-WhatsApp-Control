@@ -221,34 +221,13 @@ If no tools needed, skip to Final Answer directly.`],
         return fastResponse;
       }
 
-      // Check for simple email requests and try optimized processing
-      if (this.isSimpleEmailRequest(userMessage)) {
-        this.logger.log(`📧 [${requestId}] Detected simple email request, using optimized processing`);
-        try {
-          const emailResponse = await this.processEmailRequestOptimized(userMessage, userId, requestId);
-          if (emailResponse) {
-            const duration = Date.now() - startTime;
-            this.logger.log(`⚡ [${requestId}] Optimized email processing completed in ${duration}ms`);
-
-            // Add to history
-            this.addToHistory(userId, {
-              role: 'user',
-              content: userMessage,
-              timestamp: new Date(),
-            });
-            this.addToHistory(userId, {
-              role: 'assistant',
-              content: emailResponse,
-              timestamp: new Date(),
-            });
-
-            return emailResponse;
-          }
-        } catch (error) {
-          this.logger.warn(`⚠️ [${requestId}] Optimized email processing failed, falling back to agent: ${error.message}`);
-          // Continue to normal agent processing
-        }
-      }
+      // DISABLED: Optimized email processing - needs proper implementation with batch content fetching
+      // The MCP search only returns message IDs, not actual email content
+      // For now, let the full agent handle email requests properly
+      // if (this.isSimpleEmailRequest(userMessage)) {
+      //   this.logger.log(`📧 [${requestId}] Detected simple email request, using optimized processing`);
+      //   ...
+      // }
 
       // Ensure agent executor is ready for complex queries
       if (!this.agentExecutor) {

@@ -1,33 +1,18 @@
 # NestJS Whapi WhatsApp Integration
 
-Minimal NestJS (test) setup to receive WhatsApp messages via webhooks and reply using the Whapi API.
+NestJS (test) setup with Langhain to receive WhatsApp messages via webhooks, process them with various tools/agents and reply using the Whapi API.
 
 - Webhook endpoint -> automatic reply
 
 ### Run and kill
+It's just a weekend built demo so I am "testing in prod" the deploy.sh script is the best approach to quickly kill, pull, build, flush logs and deploy
 
+## The human touch (UX)
+One thing that was told by Limova team is that the personification of the agents was a game changer, having the 3 dots as if someone was writeing while the AI and server is processing is a game changer imo
 
-```bash
-sudo pm2 start dist/main.js --name nestjs-whatsapp --update-env
-```
-
-```bash
-
-sudo pm2 delete all
-sudo pm2 flush
-sudo lsof -i :3000
-```
-
-## API Endpoints
-
-### Messages Webhook
-`POST /:channelId/messages` - Handles incoming WhatsApp messages
-
-### Chats Webhook
-`PATCH /:channelId/chats` - Handles chat metadata updates
+### Webhook(s)
 
 ## Testing the server
-
 Simulating a messages webhook request:
 
 ```bash
@@ -68,12 +53,7 @@ Send a WhatsApp message to your connected number. You should see:
 
 ```
 src/
-├── main.ts                    # Application entry point
-├── app.module.ts              # Root module
-├── webhook/
-│   └── webhook.controller.ts  # Webhook endpoint handler
-└── whapi/
-    └── whapi.service.ts       # Whapi API integration
+├── 
 ```
 
 ## Useful Whapi Documentation
@@ -81,29 +61,3 @@ src/
 - [Where to find the webhook URL](https://support.whapi.cloud/help-desk/receiving/webhooks/where-to-find-the-webhook-url)
 - [API documentation](https://whapi.readme.io/reference/checkhealth)
 
-## Production Deployment
-
-For production, replace the ngrok URL with domain, update  webhook configuration in Whapi
-
-## Logs
-
-- ✅ Successful operations
-- 📥 Incoming webhooks
-- 📨 Received messages
-- ❌ Errors
-
-## Troubleshooting
-
-**Webhook not receiving messages:**
-- Verify ngrok is running and the URL is correct
-- Check that the webhook is properly configured in Whapi
-- Ensure your Whapi channel status is "AUTH"
-
-**Health check failing:**
-- Verify `WHAPI_TOKEN` is correct in `.env`
-- Check your channel status at `https://gate.whapi.cloud/health`
-
-**Messages not being sent:**
-- Check logs for error messages
-- Verify the token has permission to send messages
-- Ensure the recipient number is in correct format

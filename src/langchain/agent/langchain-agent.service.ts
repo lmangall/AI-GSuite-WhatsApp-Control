@@ -204,16 +204,18 @@ CRITICAL FORMAT RULES:
           if (outputMatch && outputMatch[1]) {
             const llmOutput = outputMatch[1].trim();
             
-            // If it's a question or conversational response, wrap it as Final Answer
-            if (llmOutput.includes('?') || llmOutput.match(/^(what|how|which|when|where|why|just|please)/i)) {
-              this.logger.log(`✅ Detected question/response, wrapping as Final Answer`);
-              return `Final Answer: ${llmOutput}`;
-            }
+            // Check if it's a simple conversational response (greeting, question, short answer)
+            const isSimpleResponse = (
+              llmOutput.length < 500 && 
+              llmOutput.match(/[.!?]$/) &&
+              !llmOutput.includes('Action:') &&
+              !llmOutput.includes('Thought:')
+            );
             
-            // If it looks like a complete sentence, wrap it
-            if (llmOutput.length > 10 && llmOutput.length < 500 && llmOutput.match(/[.!?]$/)) {
-              this.logger.log(`✅ Detected complete response, wrapping as Final Answer`);
-              return `Final Answer: ${llmOutput}`;
+            if (isSimpleResponse) {
+              this.logger.log(`✅ Detected simple conversational response, returning directly`);
+              // Return with proper ReAct format to signal completion
+              return `Thought: I have the answer\nFinal Answer: ${llmOutput}`;
             }
           }
           
@@ -224,7 +226,7 @@ CRITICAL FORMAT RULES:
             // Only use this if there's no action in the message
             if (answer.length > 10 && answer.length < 1000 && !errorMessage.includes('Action:')) {
               this.logger.log(`✅ Extracted Final Answer from parsing error`);
-              return `Final Answer: ${answer}`;
+              return `Thought: I have the answer\nFinal Answer: ${answer}`;
             }
           }
           
@@ -234,7 +236,7 @@ CRITICAL FORMAT RULES:
             if (contentMatch && contentMatch[1]) {
               const extractedContent = contentMatch[1].trim();
               this.logger.log(`✅ Extracted email content from parsing error`);
-              return `Final Answer: ${extractedContent}`;
+              return `Thought: I have the results\nFinal Answer: ${extractedContent}`;
             }
           }
           

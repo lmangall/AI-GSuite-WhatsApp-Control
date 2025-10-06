@@ -309,7 +309,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         try {
           this.logger.debug(`Executing MCP tool: ${mcpTool.name}`, { 
             inputType: typeof input,
-            input: input 
+            input: input,
+            inputKeys: input && typeof input === 'object' ? Object.keys(input) : 'N/A'
           });
 
           // Handle different argument formats from LangChain
@@ -318,6 +319,7 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           // LangChain ReAct agent passes arguments as an object directly
           if (input && typeof input === 'object' && !Array.isArray(input)) {
             parsedArgs = { ...input };
+            this.logger.debug(`Parsed object input for ${mcpTool.name}:`, parsedArgs);
           } else if (typeof input === 'string') {
             // Try to parse as JSON first
             if (input.trim().startsWith('{') || input.trim().startsWith('[')) {
@@ -386,8 +388,8 @@ export class LangChainToolManagerService implements ILangChainToolManager {
 
           // Auto-inject user_google_email for Gmail tools if not provided
           if (mcpTool.name && mcpTool.name.includes('gmail') && !parsedArgs.user_google_email) {
-            // Try to get from environment or use a default
-            const defaultEmail = process.env.DEFAULT_GOOGLE_EMAIL || 'user@gmail.com';
+            // Use Leo's email as default
+            const defaultEmail = process.env.DEFAULT_GOOGLE_EMAIL || 'l.mangallon@gmail.com';
             parsedArgs.user_google_email = defaultEmail;
             this.logger.debug(`Auto-injected user_google_email: ${defaultEmail} for tool: ${mcpTool.name}`);
           }
@@ -415,11 +417,17 @@ export class LangChainToolManagerService implements ILangChainToolManager {
         }
       };
 
-      // Create LangChain tool using DynamicTool with simplified approach
+      // Create LangChain tool using DynamicTool with proper schema handling
       const langChainTool = new DynamicTool({
         name: mcpTool.name || 'unknown_tool',
         description: mcpTool.description || `MCP tool: ${mcpTool.name}`,
-        func: toolFunction
+        func: toolFunction,
+        // Add schema if available to help with parameter parsing
+        schema: mcpTool.inputSchema ? {
+          type: 'object',
+          properties: mcpTool.inputSchema.properties || {},
+          required: mcpTool.inputSchema.required || []
+        } : undefined
       }) as LangChainTool;
 
       // Add additional properties

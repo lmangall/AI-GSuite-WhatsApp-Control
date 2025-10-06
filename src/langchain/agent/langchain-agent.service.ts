@@ -724,11 +724,18 @@ If no tools needed, skip to Final Answer directly.`],
       
       // Execute search with timeout
       this.logger.log(`🔍 [${requestId}] Searching emails: ${query}`);
-      const searchPromise = (searchTool as any).invoke({
+      
+      // Prepare the search parameters
+      const searchParams = {
         query: query,
         user_google_email: 'l.mangallon@gmail.com',
         page_size: pageSize
-      });
+      };
+      
+      this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
+      
+      // Call the tool using the proper LangChain tool interface
+      const searchPromise = searchTool.call(searchParams);
       
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Email search timeout')), 10000);
@@ -1078,11 +1085,17 @@ If no tools needed, skip to Final Answer directly.`],
     try {
       // Call the search tool directly
       this.logger.log(`🔍 [${requestId}] Searching emails with query: ${query}`);
-      const searchResult = await (searchTool as any).invoke({
+      
+      // Prepare the search parameters
+      const searchParams = {
         query: query,
         user_google_email: 'l.mangallon@gmail.com',
         page_size: 10
-      });
+      };
+      
+      this.logger.debug(`🔍 [${requestId}] Search parameters:`, searchParams);
+      
+      const searchResult = await searchTool.call(searchParams);
       
       // Parse and format the results
       if (searchResult && searchResult.includes('No messages found')) {

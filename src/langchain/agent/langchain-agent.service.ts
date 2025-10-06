@@ -180,6 +180,24 @@ CRITICAL FORMAT RULES:
           
           const errorMessage = error.message;
           
+          // Extract the actual LLM output (before "Troubleshooting URL")
+          const outputMatch = errorMessage.match(/Could not parse LLM output:\s*(.+?)(?:\n\nTroubleshooting|$)/is);
+          if (outputMatch && outputMatch[1]) {
+            const llmOutput = outputMatch[1].trim();
+            
+            // If it's a question or conversational response, wrap it as Final Answer
+            if (llmOutput.includes('?') || llmOutput.match(/^(what|how|which|when|where|why|just|please)/i)) {
+              this.logger.log(`✅ Detected question/response, wrapping as Final Answer`);
+              return `Final Answer: ${llmOutput}`;
+            }
+            
+            // If it looks like a complete sentence, wrap it
+            if (llmOutput.length > 10 && llmOutput.length < 500 && llmOutput.match(/[.!?]$/)) {
+              this.logger.log(`✅ Detected complete response, wrapping as Final Answer`);
+              return `Final Answer: ${llmOutput}`;
+            }
+          }
+          
           // Try to extract Final Answer if it exists in the error
           const finalAnswerMatch = errorMessage.match(/Final Answer:\s*(.+?)(?:\n\n|Troubleshooting|$)/is);
           if (finalAnswerMatch && finalAnswerMatch[1]) {

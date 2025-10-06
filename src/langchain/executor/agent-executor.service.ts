@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AgentExecutor, createReactAgent } from 'langchain/agents';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
-import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import { LangChainConfigService } from '../config/langchain-config.service';
 import { LangChainToolManagerService } from '../tools/tool-manager.service';
 import { LangChainPromptManagerService } from '../prompts/prompt-manager.service';
@@ -14,8 +14,7 @@ import {
   ILangChainAgentExecutor, 
   AgentExecutionResult, 
   AgentExecutionStats,
-  AgentStep,
-  AgentExecutionContext
+  AgentStep
 } from './agent-executor.interface';
 
 @Injectable()
@@ -31,7 +30,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
     private readonly configService: LangChainConfigService,
     private readonly toolManager: LangChainToolManagerService,
     private readonly promptManager: LangChainPromptManagerService,
-    private readonly memoryManager: LangChainMemoryManagerService,
+    private readonly _memoryManager: LangChainMemoryManagerService,
     private readonly contextService: ConversationContextService,
     private readonly intentDetection: IntentDetectionService
   ) {}
@@ -107,6 +106,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       const agentInput = {
         input: messageContext.messageText,
         chat_history: conversationContext,
+        agent_scratchpad: [], // Initialize empty scratchpad for new conversation
         current_time: new Date().toISOString(),
         available_tools: this.toolManager.getToolNames().join(', ')
       };
@@ -162,7 +162,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
       this.logger.debug(`Executing agent with intent: ${messageContext.detectedIntent.intent}`);
 
       // Create intent-specific prompt
-      const contextAwarePrompt = await this.promptManager.createContextAwarePrompt(messageContext);
+      await this.promptManager.createContextAwarePrompt(messageContext);
       
       // Update agent with context-aware prompt if needed
       if (this.agentExecutor && messageContext.detectedIntent.intent !== 'general_chat') {
@@ -356,7 +356,7 @@ export class LangChainAgentExecutorService implements ILangChainAgentExecutor {
   private async generateFallbackResponse(messageContext: MessageContext, error: string): Promise<string> {
     try {
       // Use prompt manager to create error handling prompt
-      const errorPrompt = this.promptManager.createErrorHandlingPrompt(error, messageContext.messageText);
+      this.promptManager.createErrorHandlingPrompt(error, messageContext.messageText);
       
       // Try to get a response using the fallback model
       if (this.fallbackModel) {

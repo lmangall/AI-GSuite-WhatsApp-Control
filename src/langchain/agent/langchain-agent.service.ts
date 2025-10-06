@@ -8,7 +8,7 @@ import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
 
 import { IAgentService } from '../../agent/agent.interface';
-import { BaseAgentService, ConversationHistory } from '../../agent/base-agent.service';
+import { BaseAgentService } from '../../agent/base-agent.service';
 import { LangChainConfigService } from '../config/langchain-config.service';
 import { LangChainConfig, MessageContext, ConversationMessage } from '../interfaces/langchain-config.interface';
 
@@ -379,7 +379,7 @@ Begin!`
     };
   }
 
-  private async processWebSearchIntent(userId: string, message: string, requestId: string, context: MessageContext): Promise<string> {
+  private async processWebSearchIntent(userId: string, message: string, requestId: string, _context: MessageContext): Promise<string> {
     this.logger.debug(`Processing web search intent for user ${userId}`);
     
     // For now, just add a note about web search capability
@@ -387,7 +387,7 @@ Begin!`
     return `🔍 Web search capability detected. ${baseResponse}`;
   }
 
-  private async processMCPToolsIntent(userId: string, message: string, requestId: string, context: MessageContext): Promise<string> {
+  private async processMCPToolsIntent(userId: string, message: string, requestId: string, _context: MessageContext): Promise<string> {
     this.logger.debug(`Processing MCP tools intent for user ${userId}`);
     
     // For now, just add a note about MCP tools capability
@@ -432,6 +432,7 @@ Begin!`
       executor.invoke({
         input,
         chat_history: chatHistory,
+        agent_scratchpad: [], // Initialize empty scratchpad for new conversation
       }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error(`${modelType} model execution timeout after ${timeout}ms`)), timeout)

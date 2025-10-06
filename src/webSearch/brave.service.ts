@@ -1,13 +1,21 @@
 import { Injectable, HttpException, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { BraveSearchOptions, BraveSearchResult } from './brave.interface';
-import { BRAVE_API_URL, BRAVE_API_KEY } from './brave.constants';
+import { BRAVE_API_URL } from './brave.constants';
 
 @Injectable()
 export class BraveService {
   private readonly logger = new Logger(BraveService.name);
+  private readonly apiKey: string;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {
+    this.apiKey = this.configService.get<string>('BRAVE_SEARCH_API_KEY', '');
+    this.logger.log(`🔧 BraveService initialized with API key: ${this.apiKey ? 'Yes (length: ' + this.apiKey.length + ')' : 'NO'}`);
+  }
 
   async search(options: BraveSearchOptions): Promise<BraveSearchResult> {
     const startTime = Date.now();
@@ -20,7 +28,7 @@ export class BraveService {
 
     this.logger.log(`🌐 [BraveService] ⏰ [HTTP 1/3] Starting search request`);
     this.logger.log(`🌐 [BraveService] Query: "${options.query}"`);
-    this.logger.log(`🌐 [BraveService] API Key configured: ${BRAVE_API_KEY && BRAVE_API_KEY !== '<YOUR_API_KEY_HERE>' ? 'Yes (length: ' + BRAVE_API_KEY.length + ')' : 'NO - MISSING!'}`);
+    this.logger.log(`🌐 [BraveService] API Key length: ${this.apiKey.length}, first 8 chars: ${this.apiKey.substring(0, 8)}`);
 
     try {
       this.logger.log(`🌐 [BraveService] ⏰ [HTTP 2/3] Making HTTP GET request (4s timeout)...`);
@@ -30,7 +38,7 @@ export class BraveService {
         headers: {
           'Accept': 'application/json',
           'Accept-Encoding': 'gzip',
-          'X-Subscription-Token': BRAVE_API_KEY,
+          'X-Subscription-Token': this.apiKey,
         },
         timeout: 4000, // 4 second timeout for HTTP request
       });

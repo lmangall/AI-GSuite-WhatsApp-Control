@@ -118,24 +118,33 @@ export class LangChainToolManagerService implements ILangChainToolManager {
           this.logger.log(`🔍 [BRAVE_SEARCH] Executing search with optimized query: "${optimizedQuery}"`);
 
           // Execute search with timeout
-          this.logger.debug(`🔍 [BRAVE_SEARCH] Creating search promise...`);
+          this.logger.log(`🔍 [BRAVE_SEARCH] ⏰ [STEP 1/4] Starting braveService.search() call...`);
+          
           const searchPromise = this.braveService.search({
             query: optimizedQuery,
             count: 5,
             country: 'us',
             search_lang: 'en'
+          }).then(result => {
+            this.logger.log(`🔍 [BRAVE_SEARCH] ✅ [STEP 2/4] braveService.search() returned successfully`);
+            return result;
+          }).catch(error => {
+            this.logger.error(`🔍 [BRAVE_SEARCH] ❌ [STEP 2/4] braveService.search() threw error:`, error.message);
+            throw error;
           });
 
-          this.logger.debug(`🔍 [BRAVE_SEARCH] Creating timeout promise (10s)...`);
+          this.logger.log(`🔍 [BRAVE_SEARCH] ⏰ [STEP 3/4] Setting up 5s timeout...`);
           const timeoutPromise = new Promise<never>((_, reject) => 
             setTimeout(() => {
-              this.logger.error(`🔍 [BRAVE_SEARCH] ⏱️ Timeout reached after 10 seconds`);
-              reject(new Error('Brave search timeout after 10 seconds'));
-            }, 10000)
+              this.logger.error(`🔍 [BRAVE_SEARCH] ⏱️ TIMEOUT after 5 seconds - braveService.search() did not complete`);
+              reject(new Error('Brave search timeout after 5 seconds'));
+            }, 5000)
           );
 
-          this.logger.debug(`🔍 [BRAVE_SEARCH] Racing promises...`);
+          this.logger.log(`🔍 [BRAVE_SEARCH] ⏰ Racing promises (search vs 5s timeout)...`);
           const searchResult = await Promise.race([searchPromise, timeoutPromise]);
+          this.logger.log(`🔍 [BRAVE_SEARCH] ✅ [STEP 4/4] Promise race completed, processing results...`);
+
 
           const searchDuration = Date.now() - searchStartTime;
           const resultCount = searchResult?.web?.results?.length || 0;

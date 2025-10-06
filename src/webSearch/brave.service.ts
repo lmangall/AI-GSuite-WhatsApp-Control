@@ -18,19 +18,20 @@ export class BraveService {
       search_lang: options.search_lang || 'en',
     });
 
-    this.logger.debug(`🌐 [BraveService] Starting search request`);
-    this.logger.debug(`🌐 [BraveService] Query: "${options.query}"`);
-    this.logger.debug(`🌐 [BraveService] URL: ${BRAVE_API_URL}?${params}`);
-    this.logger.debug(`🌐 [BraveService] API Key configured: ${BRAVE_API_KEY ? 'Yes' : 'No'}`);
+    this.logger.log(`🌐 [BraveService] ⏰ Starting search request`);
+    this.logger.log(`🌐 [BraveService] Query: "${options.query}"`);
+    this.logger.log(`🌐 [BraveService] URL: ${BRAVE_API_URL}?${params}`);
+    this.logger.log(`🌐 [BraveService] API Key configured: ${BRAVE_API_KEY ? 'Yes (length: ' + BRAVE_API_KEY.length + ')' : 'No'}`);
 
     try {
-      this.logger.debug(`🌐 [BraveService] Making HTTP GET request...`);
+      this.logger.log(`🌐 [BraveService] ⏰ Making HTTP GET request...`);
       const response = await this.httpService.axiosRef.get(`${BRAVE_API_URL}?${params}`, {
         headers: {
           'X-Subscription-Token': BRAVE_API_KEY,
         },
-        timeout: 8000, // 8 second timeout for HTTP request
+        timeout: 4000, // 4 second timeout for HTTP request
       });
+      this.logger.log(`🌐 [BraveService] ✅ HTTP request completed`);
 
       const duration = Date.now() - startTime;
       this.logger.log(`✅ [BraveService] Search successful in ${duration}ms`);

@@ -104,14 +104,26 @@ OTHER RULES:
 Available tools: {tools}
 Tool names: {tool_names}
 
-REACT FORMAT (follow exactly):
-Thought: [what you need to do]
-Action: [tool_name]
-Action Input: {{"parameter": "value"}}
-Observation: [tool result]
-Final Answer: [your response to Leo]
+OUTPUT FORMAT - FOLLOW EXACTLY:
+You MUST use this exact format for ALL responses:
 
-If no tools needed, skip to Final Answer directly.`],
+When using a tool:
+Thought: [brief thought about what to do]
+Action: [exact tool name]
+Action Input: {{"parameter": "value"}}
+
+After seeing tool result:
+Thought: [brief thought about the result]
+Final Answer: [your response to Leo - NO extra text before or after]
+
+When no tool needed:
+Final Answer: [your response to Leo - NO extra text before or after]
+
+CRITICAL: 
+- NEVER add conversational text like "Here are your emails:" before Final Answer
+- NEVER add "Let me know if you need anything!" after Final Answer
+- The Final Answer line should contain ONLY your response content
+- Do NOT wrap Final Answer in extra explanations`],
         ["placeholder", "{chat_history}"],
         ["human", "{input}"],
         ["assistant", "{agent_scratchpad}"]
@@ -131,7 +143,27 @@ If no tools needed, skip to Final Answer directly.`],
         verbose: true, // Enable verbose for debugging
         maxIterations: 5, // Allow enough iterations for email workflow (search + fetch + format)
         returnIntermediateSteps: true,
-        handleParsingErrors: true, // Enable parsing error handling
+        handleParsingErrors: (error: Error) => {
+          // Custom parsing error handler - extract useful content from malformed responses
+          this.logger.warn(`⚠️ Parsing error occurred: ${error.message}`);
+          
+          // Try to extract a final answer from the malformed output
+          const errorMessage = error.message;
+          
+          // Check if the error contains actual content we can use
+          if (errorMessage.includes('Here are your') || errorMessage.includes('📧')) {
+            // Extract the email list or useful content
+            const contentMatch = errorMessage.match(/Here are your[^:]*:([\s\S]*?)(?:Let me know|Troubleshooting|$)/i);
+            if (contentMatch && contentMatch[1]) {
+              const extractedContent = contentMatch[1].trim();
+              this.logger.log(`✅ Extracted useful content from parsing error`);
+              return `Final Answer: ${extractedContent}`;
+            }
+          }
+          
+          // Default: ask the agent to reformat properly
+          return `Invalid format. Please respond with ONLY:\nFinal Answer: [your response to Leo]`;
+        },
       });
 
       this.logger.log(`✅ Agent executor created successfully`);
@@ -159,7 +191,7 @@ If no tools needed, skip to Final Answer directly.`],
         return new ChatGoogleGenerativeAI({
           apiKey,
           model: 'gemini-2.0-flash-exp',
-          temperature: 0.1, // Lower temperature for more consistent output
+          temperature: 0, // Zero temperature for maximum consistency and format adherence
           maxOutputTokens: Math.min(this.config.maxTokens, 1000), // Limit tokens for faster response
         });
       } else {
@@ -171,7 +203,7 @@ If no tools needed, skip to Final Answer directly.`],
         return new ChatOpenAI({
           apiKey,
           modelName: 'gpt-4o-mini',
-          temperature: 0.1, // Lower temperature for more consistent output
+          temperature: 0, // Zero temperature for maximum consistency and format adherence
           maxTokens: Math.min(this.config.maxTokens, 1000), // Limit tokens for faster response
           timeout: 15000, // 15 second timeout
         });
@@ -276,6 +308,9 @@ If no tools needed, skip to Final Answer directly.`],
         this.logger.warn(`⚠️  [${requestId}] No tools were called by the agent`);
       }
 
+      // Clean up the output to remove any parsing artifacts
+      const cleanedOutput = this.cleanAgentOutput(result.output);
+
       // Add messages to history
       this.addToHistory(userId, {
         role: 'user',
@@ -285,15 +320,15 @@ If no tools needed, skip to Final Answer directly.`],
 
       this.addToHistory(userId, {
         role: 'assistant',
-        content: result.output,
+        content: cleanedOutput,
         timestamp: new Date(),
       });
 
       const duration = Date.now() - startTime;
       this.logger.log(`✅ [${requestId}] Successfully processed message for user ${userId} with ${this.config.defaultModel} model (${duration}ms)`);
-      this.logger.log(`📤 [${requestId}] Response: "${result.output.substring(0, 150)}${result.output.length > 150 ? '...' : ''}"`);
+      this.logger.log(`📤 [${requestId}] Response: "${cleanedOutput.substring(0, 150)}${cleanedOutput.length > 150 ? '...' : ''}"`);
 
-      return result.output;
+      return cleanedOutput;
 
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -788,6 +823,47 @@ If no tools needed, skip to Final Answer directly.`],
     // Fallback: count message indicators
     const messageIndicators = searchResult.match(/Message ID:/g);
     return messageIndicators ? messageIndicators.length : 0;
+  }
+
+  /**
+   * Clean agent output to remove parsing artifacts and conversational wrappers
+   */
+  private cleanAgentOutput(output: string): string {
+    if (!output) return output;
+
+    let cleaned = output;
+
+    // Remove common conversational wrappers that violate the format
+    const unwantedPrefixes = [
+      /^Here are your [^:]*:\s*/i,
+      /^Here's what [^:]*:\s*/i,
+      /^Let me show you [^:]*:\s*/i,
+      /^I found [^:]*:\s*/i,
+    ];
+
+    unwantedPrefixes.forEach(pattern => {
+      cleaned = cleaned.replace(pattern, '');
+    });
+
+    // Remove common conversational suffixes
+    const unwantedSuffixes = [
+      /\s*Let me know if you need anything else!?\s*$/i,
+      /\s*Is there anything else I can help you with\??\s*$/i,
+      /\s*Feel free to ask if you need more help!?\s*$/i,
+      /\s*Troubleshooting URL:.*$/i,
+    ];
+
+    unwantedSuffixes.forEach(pattern => {
+      cleaned = cleaned.replace(pattern, '');
+    });
+
+    // Remove "Final Answer:" prefix if it leaked through
+    cleaned = cleaned.replace(/^Final Answer:\s*/i, '');
+
+    // Trim whitespace
+    cleaned = cleaned.trim();
+
+    return cleaned;
   }
 
   // Method to get memory for user (will be implemented in later tasks)

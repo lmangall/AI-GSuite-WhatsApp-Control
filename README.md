@@ -1,4 +1,8 @@
-Jarvis - WhatsApp AI Agent with Google Workspace Integration
+# Jarvis - WhatsApp AI Agent with Google Workspace Integration
+
+
+https://github.com/user-attachments/assets/a6ed150a-3f21-4c05-ab7d-4c54f75b0b53
+
 
 Jarvis is your personal AI assistant accessible through WhatsApp, capable of managing your entire Google Workspace, performing web searches, and engaging in natural conversations.
 Jarvis maintains its own Google Calendar for task tracking and scheduling
@@ -121,6 +125,18 @@ jarvis/
 - [Whapi Webhooks Guide](https://support.whapi.cloud/help-desk/receiving/webhooks/where-to-find-the-webhook-url)
 - [Whapi API Reference](https://whapi.readme.io/reference/checkhealth)
 - [LangChain Documentation](https://js.langchain.com/docs/)
+
+
+
+
+
+
+
+
+https://github.com/user-attachments/assets/103fabf4-5a5b-4a2f-ac10-67ad41dd5c70
+
+
+
 
 
 

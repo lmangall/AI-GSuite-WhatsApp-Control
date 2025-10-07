@@ -1,13 +1,7 @@
 # Jarvis -  AI Agent on WhatsApp with Google Workspace Integration
 
 
-<p align="center">
-  <video width="600" controls>
-    <source src="https://github.com/user-attachments/assets/1a90eb37-e693-4ffe-92ba-9a3b5605ac98" type="video/mp4">
-    Your browser does not support the video tag.
-  </video>
-</p>
-
+https://github.com/user-attachments/assets/1a90eb37-e693-4ffe-92ba-9a3b5605ac98
 
 Jarvis is your personal AI assistant accessible through WhatsApp, capable of managing your entire Google Workspace, performing web searches, and engaging in natural conversations.
 Jarvis maintains its own Google Calendar for task tracking and scheduling

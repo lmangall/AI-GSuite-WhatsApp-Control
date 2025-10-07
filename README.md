@@ -1,7 +1,12 @@
-# Jarvis - WhatsApp AI Agent with Google Workspace Integration
+# Jarvis -  AI Agent on WhatsApp with Google Workspace Integration
 
 
-https://github.com/user-attachments/assets/a6ed150a-3f21-4c05-ab7d-4c54f75b0b53
+<p align="center">
+  <video width="600" controls>
+    <source src="https://github.com/user-attachments/assets/1a90eb37-e693-4ffe-92ba-9a3b5605ac98" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+</p>
 
 
 Jarvis is your personal AI assistant accessible through WhatsApp, capable of managing your entire Google Workspace, performing web searches, and engaging in natural conversations.
@@ -24,9 +29,17 @@ Jarvis maintains its own Google Calendar for task tracking and scheduling
 - **Dual AI Support**: Primary (Gemini) and fallback (OpenAI) models
 
 
-## Preliminary:
+## Flow
+
+```
+WhatsApp Message (webhook) → Agent Factory → LangChain Agent → Intent Detection → Agent Executor
+           ↑                                                                           ↓
+WhatsApp Message (API)   ←   Memory  ←  Prompt Manager  ←  Tool Manager  ←  Tools (MCP, Brave)
+```
+
+## Preliminary trials:
 Before integrating under one App I tested individually
-**Phase 1:** Individual Testing & Validation
+- **Phase 1:** Individual Testing & Validation
 - *WhatsApp API* → [nestjs-whatsapp](https://github.com/lmangall/nestjs-whatsapp) - Webhook reception and message sending
 - *MCP Server* → [google_workspace_mcp](https://github.com/lmangall/google_workspace_mcp) - Deployed to Render
 - *MCP Client* → [nestjs-mcp-client-test](https://github.com/lmangall/nestjs-mcp-client-test) - NestJS wrapper to communicate with MCP server
@@ -41,14 +54,6 @@ It's just a weekend built demo so I am "testing in prod". I ssh into the EC2 on 
 ## The UX touch ✨
 Limova team communicated that the personification of the agents was a game changer. I added WhatsApp typing indicators ("three dots") while processing requests, This way users "waits" more easilly, but also it gives a great feeling
 
-
-## Flow
-
-```
-WhatsApp Message (webhook) → Agent Factory → LangChain Agent → Intent Detection → Agent Executor
-           ↑                                                                           ↓
-WhatsApp Message (API)   ←   Memory  ←  Prompt Manager  ←  Tool Manager  ←  Tools (MCP, Brave)
-```
 
 ## Structure
 
@@ -90,7 +95,7 @@ jarvis/
 └── README.md
 ```
 
-## Stack
+## Stack and Infra
 
 **Featuring:**
 - 🪺 NestJS - *dependency injection go brrr~*
@@ -99,26 +104,22 @@ jarvis/
 - 🌐 Fully Deployed - *not on localhost, actual internet*
 - 📱 WhatsApp - *building a UI is overrated*
 
-
-
-## Infra
-
+**On:**
 - EC2 instance : deployment of this repo (pm2)
 - Render : deployment of the MCP as a python 3 webservice
 - Whapi API instead of a front-end (official API from meta necessitates business verification (no time for this 3 day work))
 
 
 
-
 ## Acknowledgments
 
-- MCP server implementation by [@taylorwilsdon](https://github.com/taylorwilsdon)
 - Inspired by the product-market fit success of Limmova.ai
 - Motivated by the opportunity to learn fast and apply at a cool startup
+- MCP server implementation by [@taylorwilsdon](https://github.com/taylorwilsdon)
 
 
 
-## Documentation
+## Usefull reads
 
 - [OpenAI MCP Documentation](https://platform.openai.com/docs/mcp)
 - [Gemini Function Calling](https://ai.google.dev/gemini-api/docs/function-calling)

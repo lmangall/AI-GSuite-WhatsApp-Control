@@ -118,25 +118,25 @@ export class GreetingResponseService {
       'hey there', 'hello there', 'hi there', 'howdy', 'greetings'
     ];
 
-    const normalizedMessage = message.toLowerCase().trim();
+    const normalizedMessage = message.toLowerCase().trim().replace(/[!.?]+$/, '');
     
-    // Exact matches
+    // Exact matches (with or without punctuation)
     if (simpleGreetings.some(greeting => 
-      normalizedMessage === greeting || 
-      normalizedMessage === greeting + '!' ||
-      normalizedMessage === greeting + '.'
+      normalizedMessage === greeting ||
+      normalizedMessage === greeting + ' jarvis' ||
+      normalizedMessage === greeting + ' jarvis!'
     )) {
       return true;
     }
 
-    // Pattern matches for variations
+    // Pattern matches for variations (including "jarvis" variations)
     const greetingPatterns = [
-      /^(hi|hello|hey|halo|hola|yo|sup|wassup)(\s+(there|dude|man|bro))?[!.]?$/i,
-      /^(good\s+(morning|afternoon|evening|night))[!.]?$/i,
-      /^(how\s+(are\s+you|\'s\s+it\s+going))[?!.]?$/i,
-      /^(what\'?s\s+up)[?!.]?$/i
+      /^(hi|hello|hey|halo|hola|yo|sup|wassup)(\s+(there|dude|man|bro|jarvis))?[!.?]*$/i,
+      /^(good\s+(morning|afternoon|evening|night))(\s+jarvis)?[!.?]*$/i,
+      /^(how\s+(are\s+you|\'s\s+it\s+going))(\s+jarvis)?[?!.]*$/i,
+      /^(what\'?s\s+up)(\s+jarvis)?[?!.]*$/i
     ];
 
-    return greetingPatterns.some(pattern => pattern.test(normalizedMessage));
+    return greetingPatterns.some(pattern => pattern.test(message.trim()));
   }
 }

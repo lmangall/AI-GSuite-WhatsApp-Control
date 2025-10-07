@@ -1,41 +1,7 @@
 Jarvis - WhatsApp AI Agent with Google Workspace Integration
 
 Jarvis is your personal AI assistant accessible through WhatsApp, capable of managing your entire Google Workspace, performing web searches, and engaging in natural conversations.
-
-**Featuring:**
-- 🪺 NestJS - *dependency injection go brrr~*
-- 🍆 MCP - *oh yeah, we're that cutting edge*
-- 🦜 LangChain - *one AI call is never enough*
-- 🌐 Fully Deployed - *not on localhost, actual internet*
-- 📱 WhatsApp - *building a UI is for you know, front-end people*
-
-
- The agent have his own Google Calendar and it can be used as a personification of the agent, to make it more tangible but also have an overview of the scheduled tasks. The agent can decide alone to add to its calendar
-
-## Discovery Steps:
-(What I did to arrive to this result)
-
-### Phase 1: Individual Testing & Validation
-
-- **WhatsApp API** → [nestjs-whatsapp](https://github.com/lmangall/nestjs-whatsapp) - Webhook reception and message sending
-- **MCP Server** → [google_workspace_mcp](https://github.com/lmangall/google_workspace_mcp) - Deployed to Render
-- **Google OAuth 2.0** 
-- **MCP Client** → [nestjs-mcp-client-test](https://github.com/lmangall/nestjs-mcp-client-test) - NestJS wrapper to communicate with MCP server
-
-### Phase 2: Integration
-
-- Connected all tested modules under a single Nestjs
-- Established WhatsApp → NestJS → MCP communication pipeline
-- Added **Brave Search API** for web search
-- Implemented error handling and fallback mechanisms
-
-### Phase 3: LangChain, Enhancement
-
-- **~20 Integrated Tools in total **
-- **Intent Detection** - Smart routing (avoid agentic flow to answer fast)
-- **Memory Management**
-- **Dual AI Architecture** - Gemini (primary) and OpenAI (fallback) or env var driven
-
+Jarvis maintains its own Google Calendar for task tracking and scheduling
 
 ##  Features
 
@@ -52,6 +18,14 @@ Jarvis is your personal AI assistant accessible through WhatsApp, capable of man
   - ~20 integrated tools
 - **Agent Personification**: The AI agent maintains its own Google Calendar for task tracking and scheduling
 - **Dual AI Support**: Primary (Gemini) and fallback (OpenAI) models
+
+
+## Preliminary:
+Before integrating under one App I tested individually
+**Phase 1:** Individual Testing & Validation
+- *WhatsApp API* → [nestjs-whatsapp](https://github.com/lmangall/nestjs-whatsapp) - Webhook reception and message sending
+- *MCP Server* → [google_workspace_mcp](https://github.com/lmangall/google_workspace_mcp) - Deployed to Render
+- *MCP Client* → [nestjs-mcp-client-test](https://github.com/lmangall/nestjs-mcp-client-test) - NestJS wrapper to communicate with MCP server
 
 ### Future improvements
 Enterprise standard with multi tenant: this will necessitate to have a more advanced auth, manage users in a db...
@@ -78,12 +52,12 @@ WhatsApp Message (API)   ←   Memory  ←  Prompt Manager  ←  Tool Manager  �
 ```
 jarvis/
 ├── src/
-│   ├── agent/                    # Agent factory and legacy agents
+│   ├── agent/                    # Agent factory
 │   │   ├── agent-factory.service.ts
 │   │   ├── gemini-agent.service.ts
 │   │   └── openai-agent.service.ts
-│   ├── langchain/                # LangChain integration
-│   │   ├── agent/                # Main agent service
+│   ├── langchain/                # LangChain 
+│   │   ├── agent/                # Main agent
 │   │   ├── circuit-breaker/      # Resilience patterns
 │   │   ├── executor/             # Agent execution
 │   │   ├── intent/               # Intent detection & routing
@@ -92,11 +66,11 @@ jarvis/
 │   │   ├── prompts/              # Prompt management
 │   │   ├── tools/                # Tool management
 │   │   └── langchain-router.service.ts
-│   ├── mcp/                      # MCP client integration
+│   ├── mcp/                      # MCP for Google Workspace
 │   │   └── google-workspace-mcp.service.ts
-│   ├── webSearch/                # Brave Search integration
+│   ├── webSearch/                # Brave
 │   │   └── brave.service.ts
-│   ├── whapi/                    # WhatsApp API integration
+│   ├── whapi/                    # WhatsApp API 
 │   │   ├── whapi.controller.ts
 │   │   └── whapi.service.ts
 │   ├── app.module.ts
@@ -113,15 +87,21 @@ jarvis/
 ```
 
 ## Stack
-This repo is Nestjs (so Node, js and ts under the hood) it uses Langchain for more scalable AI agentic approach
-The MCP is a Python 3 ([google_workspace_mcp](https://github.com/taylorwilsdon/google-workspace-mcp))
+
+**Featuring:**
+- 🪺 NestJS - *dependency injection go brrr~*
+- 🍆 MCP - *oh yeah, we're that cutting edge*
+- 🦜 LangChain - *one AI call is never enough*
+- 🌐 Fully Deployed - *not on localhost, actual internet*
+- 📱 WhatsApp - *building a UI is overrated*
+
 
 
 ## Infra
 
-EC2 instance : deployment of this repo (pm2)
-Render : deployment of the MCP as a python 3 webservice
-Whapi API instead of a front-end (official API from meta necessitates business verification (no time for this 3 day work))
+- EC2 instance : deployment of this repo (pm2)
+- Render : deployment of the MCP as a python 3 webservice
+- Whapi API instead of a front-end (official API from meta necessitates business verification (no time for this 3 day work))
 
 
 

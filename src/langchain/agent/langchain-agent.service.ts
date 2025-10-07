@@ -140,24 +140,25 @@ Tool names: {tool_names}
 
 OUTPUT FORMAT (FOLLOW EXACTLY):
 
-Step 1 - Use a tool:
+For simple greetings, questions, or chat - respond directly with:
+Final Answer: [your friendly response]
+
+For tool usage:
 Thought: I need to [action]
 Action: [exact_tool_name]
 Action Input: {{"param": "value"}}
 
-Step 2 - After seeing tool result:
+After tool result:
 Thought: The tool returned [result]
 Final Answer: [your response to Leo]
 
-OR if no tool needed:
-Final Answer: [your response to Leo]
-
 CRITICAL FORMAT RULES: 
+- ALWAYS start responses with "Final Answer:" unless using a tool
+- For greetings like "Hi Jarvis!" respond with "Final Answer: Hey! How's it going? 😊"
 - NEVER put multiple actions in one response
 - NEVER put Final Answer on the same line as an Action
 - Keep Final Answer natural and conversational
-- Don't add "Let me know..." or other meta-commentary
-- If you see a tool result, immediately give Final Answer`],
+- Don't add "Let me know..." or other meta-commentary`],
         ["placeholder", "{chat_history}"],
         ["human", "{input}"],
         ["assistant", "{agent_scratchpad}"]
@@ -205,17 +206,19 @@ CRITICAL FORMAT RULES:
             const llmOutput = outputMatch[1].trim();
 
             // Check if it's a simple conversational response (greeting, question, short answer)
+            // Be more lenient with detection - any reasonable response without ReAct format
             const isSimpleResponse = (
-              llmOutput.length < 500 &&
-              llmOutput.match(/[.!?]$/) &&
+              llmOutput.length < 1000 &&
               !llmOutput.includes('Action:') &&
-              !llmOutput.includes('Thought:')
+              !llmOutput.includes('Thought:') &&
+              !llmOutput.includes('Observation:') &&
+              (llmOutput.match(/[.!?😊🚀👋💪⚡🤖]/) || llmOutput.length < 100)
             );
 
             if (isSimpleResponse) {
-              this.logger.log(`✅ Detected simple conversational response, returning directly`);
+              this.logger.log(`✅ Detected simple conversational response, wrapping in Final Answer format`);
               // Return with proper ReAct format to signal completion
-              return `Thought: I have the answer\nFinal Answer: ${llmOutput}`;
+              return `Final Answer: ${llmOutput}`;
             }
           }
 
@@ -224,9 +227,9 @@ CRITICAL FORMAT RULES:
           if (finalAnswerMatch && finalAnswerMatch[1]) {
             const answer = finalAnswerMatch[1].trim();
             // Only use this if there's no action in the message
-            if (answer.length > 10 && answer.length < 1000 && !errorMessage.includes('Action:')) {
+            if (answer.length > 5 && answer.length < 1000 && !errorMessage.includes('Action:')) {
               this.logger.log(`✅ Extracted Final Answer from parsing error`);
-              return `Thought: I have the answer\nFinal Answer: ${answer}`;
+              return `Final Answer: ${answer}`;
             }
           }
 
@@ -236,7 +239,7 @@ CRITICAL FORMAT RULES:
             if (contentMatch && contentMatch[1]) {
               const extractedContent = contentMatch[1].trim();
               this.logger.log(`✅ Extracted email content from parsing error`);
-              return `Thought: I have the results\nFinal Answer: ${extractedContent}`;
+              return `Final Answer: ${extractedContent}`;
             }
           }
 
@@ -1429,14 +1432,14 @@ You:`;
 
     // Check for simple greetings - should be INSTANT
     const simpleGreetings = [
-      /^hi\s*jarvis?$/i,
-      /^hello\s*jarvis?$/i,
-      /^hey\s*jarvis?$/i,
-      /^yo\s*jarvis?$/i,
-      /^sup\s*jarvis?$/i,
-      /^hi$/i,
-      /^hello$/i,
-      /^hey$/i,
+      /^hi\s*jarvis?[!.]?$/i,
+      /^hello\s*jarvis?[!.]?$/i,
+      /^hey\s*jarvis?[!.]?$/i,
+      /^yo\s*jarvis?[!.]?$/i,
+      /^sup\s*jarvis?[!.]?$/i,
+      /^hi[!.]?$/i,
+      /^hello[!.]?$/i,
+      /^hey[!.]?$/i,
     ];
 
     if (simpleGreetings.some(pattern => pattern.test(message.trim()))) {

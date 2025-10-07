@@ -68,6 +68,11 @@ export class WhapiService implements OnModuleInit {
 
   async sendMessage(to: string, body: string): Promise<boolean> {
     try {
+      if (!body || body.trim().length === 0) {
+        this.logger.error(`❌ Cannot send empty message to ${to}`);
+        return false;
+      }
+
       const response = await fetch(`${this.baseUrl}/messages/text`, {
         method: 'POST',
         headers: {
@@ -83,9 +88,19 @@ export class WhapiService implements OnModuleInit {
       });
 
       const data = await response.json();
+      
+      if (!response.ok) {
+        this.logger.error(`❌ WhatsApp API error (${response.status}): ${JSON.stringify(data)}`);
+        return false;
+      }
+      
+      if (data.sent !== true) {
+        this.logger.warn(`⚠️ Message not sent. Response: ${JSON.stringify(data)}`);
+      }
+      
       return data.sent === true;
     } catch (error) {
-      this.logger.error(`❌ Failed to send message: ${error.message}`);
+      this.logger.error(`❌ Failed to send message to ${to}: ${error.message}`, error.stack);
       return false;
     }
   }

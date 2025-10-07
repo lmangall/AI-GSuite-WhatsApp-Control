@@ -32,6 +32,13 @@ echo "⬇️ Pulling latest changes from Git..."
 git reset --hard >/dev/null 2>&1
 git pull
 
+# ✅ Show the latest commit info
+LAST_COMMIT=$(git log -1 --pretty=format:"%h - %s (%an, %ar)")
+echo ""
+echo "📜 Latest commit pulled:"
+echo "   $LAST_COMMIT"
+echo ""
+
 echo "📦 Installing dependencies..."
 npm install 
 
@@ -47,4 +54,8 @@ sudo pm2 save
 echo ""
 echo "✅ Deployment completed successfully!"
 echo "=============================="
+echo ""
 
+# 🪄 Offer to view logs interactively
+read -p "Press ENTER to view logs, or Ctrl+C to exit... " 
+sudo pm2 logs $APP_NAME

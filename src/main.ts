@@ -21,7 +21,7 @@ async function bootstrap() {
     logger.log(`📨 Webhook endpoints:`);
     logger.log(`   POST   http://0.0.0.0:${port}/${channelId}/messages`);
     logger.log(`   PATCH  http://0.0.0.0:${port}/${channelId}/chats`);
-    logger.log(`🔧 MCP Server: ${process.env.MCP_SERVER_URL || 'NOT SET'}`);
+    logger.log(`🔧 Google Workspace MCP Server: ${process.env.GOOGLE_WORKSPACE_MCP_SERVER_URL || 'NOT SET'}`);
     
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {

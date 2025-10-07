@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, Content, FunctionDeclaration, Tool as GeminiTool, SchemaType } from '@google/generative-ai';
-import { MCPService } from '../mcp/mcp.service';
+import { GoogleWorkspaceMCPService } from '../mcp/google-workspace-mcp.service';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { IAgentService } from './agent.interface';
 import { SYSTEM_PROMPT } from './agent.prompts';
@@ -15,7 +15,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
 
   constructor(
     configService: ConfigService,
-    private mcpService: MCPService,
+    private googleWorkspaceService: GoogleWorkspaceMCPService,
   ) {
     super(configService);
   }
@@ -69,7 +69,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
     const functionDeclarations: FunctionDeclaration[] = mcpTools.map(tool => {
       const schema = tool.inputSchema as any;
       const sanitizedSchema = this.sanitizeSchema(schema);
-      
+
       return {
         name: tool.name,
         description: tool.description || `Execute ${tool.name}`,
@@ -102,7 +102,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
     try {
       this.logger.log(`[${requestId}] 🤖 Processing message with Gemini for user: ${userId}`);
 
-      const mcpTools = await this.mcpService.listTools();
+      const mcpTools = await this.googleWorkspaceService.listTools();
       this.logger.log(`[${requestId}] 🛠️  Loaded ${mcpTools.length} MCP tools`);
 
       const geminiTools = this.convertMCPToolsToGemini(mcpTools);
@@ -114,7 +114,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
       });
 
       const history = this.filterHistoryForGemini(userId);
-      
+
       const chat = this.model.startChat({ history });
 
       this.logger.log(`[${requestId}] 💬 Sending to Gemini: "${userMessage}"`);
@@ -127,7 +127,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
       while (response.functionCalls() && functionCallCount < MAX_FUNCTION_CALLS) {
         functionCallCount++;
         const functionCalls = response.functionCalls();
-        
+
         this.logger.log(`[${requestId}] 🔧 Function call #${functionCallCount}: ${functionCalls.length} tool(s) to execute`);
 
         const functionResponses = await Promise.all(
@@ -136,11 +136,11 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
             this.logger.log(`[${requestId}] 📝 Arguments: ${JSON.stringify(call.args)}`);
 
             try {
-              const toolResult = await this.mcpService.callTool(call.name, call.args);
-              
+              const toolResult = await this.googleWorkspaceService.callTool(call.name, call.args);
+
               this.logger.log(`[${requestId}] ✅ Tool ${call.name} executed successfully`);
               this.logger.log(`[${requestId}] 📊 Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);
-              
+
               return {
                 functionResponse: {
                   name: call.name,
@@ -149,7 +149,7 @@ export class GeminiAgentService extends BaseAgentService<Content> implements IAg
               };
             } catch (error: any) {
               this.logger.error(`[${requestId}] ❌ Tool ${call.name} failed: ${error.message}`);
-              
+
               return {
                 functionResponse: {
                   name: call.name,

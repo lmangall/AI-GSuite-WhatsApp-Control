@@ -41,6 +41,10 @@ Before integrating under one App I tested individually
 ### Future improvements
 Enterprise standard with multi tenant: this will necessitate to have a more advanced auth, manage users in a db...
 
+Integrations : Slack, Notion
+Capabilities : Calling, Speech to text
+Front-end dashboard : sometimes WhatsApp is not enough
+
 
 ### Run and kill
 It's just a weekend built demo so I am "testing in prod". I ssh into the EC2 on a terminal but code in a local IDE (less buggy), so the deploy.sh script is the best approach to quickly kill, pull, build, flush logs and deploy
